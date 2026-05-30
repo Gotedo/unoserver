@@ -89,11 +89,18 @@ def server_fixture():
         srvr.stop()
 
 
-@pytest.fixture(scope="session")
-def visible_slideshow_server():
+@pytest.fixture(scope="function")
+def visible_slideshow_server(request):
     """Dedicated fixture for slideshow tests with clean launch"""
     if not is_uno_available():
         pytest.skip("uno library not available")
+
+    # Extract the parametrized filename from the test
+    filename = "presentation_test.odp" # Default fallback
+    if "filename" in request.fixturenames:
+        filename = request.getfixturevalue("filename")
+
+    presentation_path = str(Path(__file__).parent / "documents" / filename)
 
     with tempfile.TemporaryDirectory() as tmpuserdir:
         user_installation = Path(tmpuserdir).as_uri()
@@ -104,7 +111,8 @@ def visible_slideshow_server():
         srvr = server.UnoServer(
             user_installation=user_installation,
             port="2005",
-            uno_port="2004"
+            uno_port="2004",
+            presentation_file=presentation_path
         )
 
         # Important: Pass executable and let UnoServer use it without forcing headless

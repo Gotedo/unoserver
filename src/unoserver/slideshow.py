@@ -47,64 +47,58 @@ class UnoSlideshow:
             "com.sun.star.frame.Desktop", ctx
         )
 
-    def load_presentation(self, path: str) -> str:
-        """Load a presentation document and return a session ID."""
+    def load_presentation(self, path: Optional[str] = None) -> str:
+        """Connect to the currently running presentation or load one."""
         if not self.ctx:
             self._connect()
 
-        url = uno.systemPathToFileUrl(path)
-        logger.info(f"Attempting to load presentation: {path}")
-
         try:
-            # Try multiple loading strategies - LibreOffice can be picky
-            load_props_list = [
-                (PropertyValue("Hidden", 0, False, 0),),           # Visible
-                (PropertyValue("Hidden", 0, True, 0),),            # Hidden first
-                (),                                                # No properties
-            ]
+            # 1. Grab the document that was automatically opened and started by --show
+            self.document = self.desktop.getCurrentComponent()
 
-            self.document = None
-            for props in load_props_list:
-                try:
-                    self.document = self.desktop.loadComponentFromURL(
-                        url, "_blank", 0, props
-                    )
-                    if self.document is not None:
-                        break
-                except Exception as inner_e:
-                    logger.debug(f"Load attempt with props {props} failed: {inner_e}")
+            # 2. Fallback: If it wasn't started with --show, load it manually
+            if self.document is None or not hasattr(self.document, "getPresentation"):
+                if not path:
+                    raise RuntimeError("No running presentation found and no path provided.")
+                url = uno.systemPathToFileUrl(path)
+                load_props = (PropertyValue("ReadOnly", 0, True, 0),)
+                self.document = self.desktop.loadComponentFromURL(url, "_blank", 0, load_props)
 
             if self.document is None:
-                raise RuntimeError(f"LibreOffice could not load the document (returned None): {path}")
+                raise RuntimeError("LibreOffice could not find or load the document.")
 
             # Verify it's a presentation
             self.presentation = self.document.getPresentation()
             if self.presentation is None:
-                raise RuntimeError(f"Loaded document is not a presentation: {path}")
+                raise RuntimeError("Loaded document is not a presentation")
 
         except Exception as e:
-            logger.error(f"Failed to load presentation {path}: {e}", exc_info=True)
-            raise RuntimeError(f"Could not load presentation file: {path}") from e
+            logger.error(f"Failed to load presentation: {e}", exc_info=True)
+            raise RuntimeError("Could not load presentation file") from e
 
         self.session_id = f"ss_{int(time.time())}_{id(self)}"
         logger.info(f"✅ Successfully loaded presentation. Session ID: {self.session_id}")
         return self.session_id
 
-
     def start(self, options: Dict[str, Any]) -> bool:
-        """Start the slideshow with given options."""
+        """Start the slideshow or connect to the already running controller."""
         if not self.presentation:
             raise RuntimeError("No presentation loaded")
 
-        logger.info(f"Starting slideshow for session {self.session_id}")
-
         try:
-            # Give LibreOffice a moment to initialize the presentation
-            time.sleep(1.5)
+            # Call start to ensure the engine is running (safe to call if already started by --show)
+            self.presentation.start()
 
-            # Modern LibreOffice: start() usually takes no arguments
-            # We set initial state via controller instead
-            controller = self.presentation.getController()
+            # Wait for the controller to become available
+            controller = None
+            for _ in range(10): # Poll for 5 seconds
+                time.sleep(0.5)
+                controller = self.presentation.getController()
+                if controller is not None:
+                    break
+
+            if controller is None:
+                raise RuntimeError("Slideshow started, but controller never became ready.")
 
             if start_slide := options.get("start_slide"):
                 try:
@@ -112,10 +106,7 @@ class UnoSlideshow:
                 except Exception as e:
                     logger.warning(f"Could not jump to slide {start_slide}: {e}")
 
-            # Start the slideshow
-            self.presentation.start()
-
-            logger.info(f"✅ Slideshow started successfully (session {self.session_id})")
+            self.is_running = True
             return True
 
         except Exception as e:

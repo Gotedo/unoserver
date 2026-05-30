@@ -56,6 +56,7 @@ class UnoServer:
         user_installation=None,
         conversion_timeout=None,
         stop_after=None,
+        presentation_file=None, # Critically needed for slideshows
     ):
         self.interface = interface
         self.uno_interface = uno_interface
@@ -68,6 +69,7 @@ class UnoServer:
         self.xmlrcp_thread = None
         self.xmlrcp_server = None
         self.intentional_exit = False
+        self.presentation_file = presentation_file
 
     def start(self, executable="libreoffice", headless=True):
         """
@@ -103,8 +105,14 @@ class UnoServer:
             logger.info("Running in HEADLESS mode (conversion)")
         else:
             # === Slideshow Mode (Visible + Fullscreen capable) ===
-            cmd.extend(["--show", "--nologo", "--norestore"])
-            logger.info("Running in VISIBLE mode (slideshow)")
+            if not self.presentation_file:
+                # Fail fast if no file is provided for headful mode
+                raise ValueError("A presentation_file must be provided when running in headful (visible) mode.")
+            
+            cmd.extend(["--nologo", "--norestore"])
+            # Pass both the flag and the file path so it launches instantly
+            cmd.extend(["--show", self.presentation_file]) 
+            logger.info(f"Running in VISIBLE mode (slideshow) for file: {self.presentation_file}")
 
         logger.info("Launch command: " + " ".join(cmd))
 
