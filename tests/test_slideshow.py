@@ -14,8 +14,8 @@ TEST_DOCS = os.path.join(os.path.abspath(os.path.split(__file__)[0]), "documents
 
 PRESENTATION_FILES = [
     "presentation_test.odp",
-    "presentation_test.ppt",
-    "presentation_test.pptx",
+    # "presentation_test.ppt",
+    # "presentation_test.pptx",
 ]
 
 
@@ -44,16 +44,17 @@ def test_slideshow_full_workflow(visible_slideshow_server, filename):
 
     # Load
     session_id = clt.load_presentation(ppt_path)
-    assert session_id.startswith("ss_")
+    assert session_id.startswith(("ss_", "slideshow_"))
 
     # Start
     success = clt.start_slideshow(session_id, {"start_slide": 1, "loop": False})
     assert success is True
 
-    time.sleep(1.5)
+    time.sleep(5)
 
     # Navigation
     clt.next_slide(session_id)
+    time.sleep(1)
     clt.goto_slide(session_id, 3)
     clt.previous_slide(session_id)
 

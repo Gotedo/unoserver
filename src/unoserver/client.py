@@ -278,6 +278,65 @@ class UnoClient:
             print(f"Unoserver {info['unoserver']}")
             print(f"API version {info['api']}")
 
+    # ====================== SLIDESHOW SUPPORT (Added by Gotedo) ======================
+
+    def load_presentation(self, path: str) -> str:
+        """Load a presentation and return a session ID."""
+        with ServerProxy(f"{self.protocol}://{self.server}:{self.port}", allow_none=True) as proxy:
+            self._connect(proxy)
+            return proxy.load_presentation(path)
+
+    def start_slideshow(self, session_id: str, options: dict = None) -> bool:
+        """Start slideshow on a specific display with options."""
+        opts = options or {}
+        with ServerProxy(f"{self.protocol}://{self.server}:{self.port}", allow_none=True) as proxy:
+            self._connect(proxy)
+            return proxy.start_slideshow(session_id, opts)
+
+    def next_slide(self, session_id: str):
+        """Next slide"""
+        with ServerProxy(f"{self.protocol}://{self.server}:{self.port}", allow_none=True) as proxy:
+            self._connect(proxy)
+            proxy.next_slide(session_id)
+
+    def previous_slide(self, session_id: str):
+        """Previous slide"""
+        with ServerProxy(f"{self.protocol}://{self.server}:{self.port}", allow_none=True) as proxy:
+            self._connect(proxy)
+            proxy.previous_slide(session_id)
+
+    def goto_slide(self, session_id: str, index: int):
+        """Jump to specific slide (0-based)"""
+        with ServerProxy(f"{self.protocol}://{self.server}:{self.port}", allow_none=True) as proxy:
+            self._connect(proxy)
+            proxy.goto_slide(session_id, index)
+
+    def pause_slideshow(self, session_id: str):
+        """Pause slideshow"""
+        with ServerProxy(f"{self.protocol}://{self.server}:{self.port}", allow_none=True) as proxy:
+            self._connect(proxy)
+            proxy.pause_slideshow(session_id)
+
+    def resume_slideshow(self, session_id: str):
+        """Resume slideshow"""
+        with ServerProxy(f"{self.protocol}://{self.server}:{self.port}", allow_none=True) as proxy:
+            self._connect(proxy)
+            proxy.resume_slideshow(session_id)
+
+    def end_slideshow(self, session_id: str):
+        """End slideshow and cleanup session"""
+        with ServerProxy(f"{self.protocol}://{self.server}:{self.port}", allow_none=True) as proxy:
+            self._connect(proxy)
+            proxy.end_slideshow(session_id)
+
+    def get_current_slide_index(self, session_id: str) -> int:
+        """Get current slide index from LibreOffice"""
+        with ServerProxy(f"{self.protocol}://{self.server}:{self.port}", allow_none=True) as proxy:
+            self._connect(proxy)
+            return proxy.get_current_slide_index(session_id)
+
+    # ===============================================================================
+
 
 def converter_main():
     parser = argparse.ArgumentParser("unoconvert")
@@ -571,65 +630,6 @@ def comparer_main():
 
     if args.outfile is None:
         sys.stdout.buffer.write(result)
-
-    # ====================== SLIDESHOW SUPPORT (Added by Gotedo) ======================
-
-    def load_presentation(self, path: str) -> str:
-        """Load a presentation and return a session ID."""
-        with ServerProxy(f"{self.protocol}://{self.server}:{self.port}", allow_none=True) as proxy:
-            self._connect(proxy)
-            return proxy.load_presentation(path)
-
-    def start_slideshow(self, session_id: str, options: dict = None) -> bool:
-        """Start slideshow on a specific display with options."""
-        opts = options or {}
-        with ServerProxy(f"{self.protocol}://{self.server}:{self.port}", allow_none=True) as proxy:
-            self._connect(proxy)
-            return proxy.start_slideshow(session_id, opts)
-
-    def next_slide(self, session_id: str):
-        """Next slide"""
-        with ServerProxy(f"{self.protocol}://{self.server}:{self.port}", allow_none=True) as proxy:
-            self._connect(proxy)
-            proxy.next_slide(session_id)
-
-    def previous_slide(self, session_id: str):
-        """Previous slide"""
-        with ServerProxy(f"{self.protocol}://{self.server}:{self.port}", allow_none=True) as proxy:
-            self._connect(proxy)
-            proxy.previous_slide(session_id)
-
-    def goto_slide(self, session_id: str, index: int):
-        """Jump to specific slide (0-based)"""
-        with ServerProxy(f"{self.protocol}://{self.server}:{self.port}", allow_none=True) as proxy:
-            self._connect(proxy)
-            proxy.goto_slide(session_id, index)
-
-    def pause_slideshow(self, session_id: str):
-        """Pause slideshow"""
-        with ServerProxy(f"{self.protocol}://{self.server}:{self.port}", allow_none=True) as proxy:
-            self._connect(proxy)
-            proxy.pause_slideshow(session_id)
-
-    def resume_slideshow(self, session_id: str):
-        """Resume slideshow"""
-        with ServerProxy(f"{self.protocol}://{self.server}:{self.port}", allow_none=True) as proxy:
-            self._connect(proxy)
-            proxy.resume_slideshow(session_id)
-
-    def end_slideshow(self, session_id: str):
-        """End slideshow and cleanup session"""
-        with ServerProxy(f"{self.protocol}://{self.server}:{self.port}", allow_none=True) as proxy:
-            self._connect(proxy)
-            proxy.end_slideshow(session_id)
-
-    def get_current_slide_index(self, session_id: str) -> int:
-        """Get current slide index from LibreOffice"""
-        with ServerProxy(f"{self.protocol}://{self.server}:{self.port}", allow_none=True) as proxy:
-            self._connect(proxy)
-            return proxy.get_current_slide_index(session_id)
-
-    # ===============================================================================
 
 
 def ping_main():

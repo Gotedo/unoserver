@@ -53,54 +53,115 @@ class UnoSlideshow:
             self._connect()
 
         url = uno.systemPathToFileUrl(path)
+        logger.info(f"Attempting to load presentation: {path}")
 
-        self.document = self.desktop.loadComponentFromURL(
-            url, "_blank", 0, ()
-        )
+        try:
+            # Try multiple loading strategies - LibreOffice can be picky
+            load_props_list = [
+                (PropertyValue("Hidden", 0, False, 0),),           # Visible
+                (PropertyValue("Hidden", 0, True, 0),),            # Hidden first
+                (),                                                # No properties
+            ]
 
-        # Get presentation
-        self.presentation = self.document.getPresentation()
-        self.session_id = f"slideshow_{int(time.time())}_{id(self)}"
-        logger.info(f"Loaded presentation. Session ID: {self.session_id}")
+            self.document = None
+            for props in load_props_list:
+                try:
+                    self.document = self.desktop.loadComponentFromURL(
+                        url, "_blank", 0, props
+                    )
+                    if self.document is not None:
+                        break
+                except Exception as inner_e:
+                    logger.debug(f"Load attempt with props {props} failed: {inner_e}")
+
+            if self.document is None:
+                raise RuntimeError(f"LibreOffice could not load the document (returned None): {path}")
+
+            # Verify it's a presentation
+            self.presentation = self.document.getPresentation()
+            if self.presentation is None:
+                raise RuntimeError(f"Loaded document is not a presentation: {path}")
+
+        except Exception as e:
+            logger.error(f"Failed to load presentation {path}: {e}", exc_info=True)
+            raise RuntimeError(f"Could not load presentation file: {path}") from e
+
+        self.session_id = f"ss_{int(time.time())}_{id(self)}"
+        logger.info(f"✅ Successfully loaded presentation. Session ID: {self.session_id}")
         return self.session_id
+
 
     def start(self, options: Dict[str, Any]) -> bool:
         """Start the slideshow with given options."""
         if not self.presentation:
             raise RuntimeError("No presentation loaded")
 
-        # Build presentation properties
-        props = []
+        logger.info(f"Starting slideshow for session {self.session_id}")
 
-        # Fullscreen
-        props.append(PropertyValue("IsFullscreen", 0, True, 0))
+        try:
+            # Give LibreOffice a moment to initialize the presentation
+            time.sleep(1.5)
 
-        # Start from specific slide
-        if start_slide := options.get("start_slide"):
-            props.append(PropertyValue("StartSlide", 0, start_slide - 1, 0))
+            # Modern LibreOffice: start() usually takes no arguments
+            # We set initial state via controller instead
+            controller = self.presentation.getController()
 
-        # Loop
-        if options.get("loop", False):
-            props.append(PropertyValue("IsLooping", 0, True, 0))
+            if start_slide := options.get("start_slide"):
+                try:
+                    controller.gotoSlide(int(start_slide) - 1)
+                except Exception as e:
+                    logger.warning(f"Could not jump to slide {start_slide}: {e}")
 
-        # TODO: Presenter console / dual screen support in future
+            # Start the slideshow
+            self.presentation.start()
 
-        self.presentation.start(props)
-        self.is_running = True
-        logger.info(f"Slideshow started (session {self.session_id})")
-        return True
+            logger.info(f"✅ Slideshow started successfully (session {self.session_id})")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to start slideshow: {e}", exc_info=True)
+            raise RuntimeError("Failed to start slideshow") from e
 
     def next(self):
-        if self.presentation:
-            self.presentation.getController().gotoNextSlide()
+        """Go to next slide"""
+        if not self.presentation:
+            return
+        try:
+            controller = self.presentation.getController()
+            if controller:
+                controller.gotoNextSlide()
+            else:
+                logger.warning("Controller not available for next_slide")
+        except Exception as e:
+            logger.warning(f"next_slide failed: {e}")
+
 
     def previous(self):
-        if self.presentation:
-            self.presentation.getController().gotoPreviousSlide()
+        """Go to previous slide"""
+        if not self.presentation:
+            return
+        try:
+            controller = self.presentation.getController()
+            if controller:
+                controller.gotoPreviousSlide()
+            else:
+                logger.warning("Controller not available for previous_slide")
+        except Exception as e:
+            logger.warning(f"previous_slide failed: {e}")
+
 
     def goto_slide(self, index: int):
-        if self.presentation:
-            self.presentation.getController().gotoSlide(index)
+        """Jump to specific slide (0-based)"""
+        if not self.presentation:
+            return
+        try:
+            controller = self.presentation.getController()
+            if controller:
+                controller.gotoSlide(index)
+            else:
+                logger.warning(f"Controller not available for goto_slide({index})")
+        except Exception as e:
+            logger.warning(f"goto_slide({index}) failed: {e}")
 
     def pause(self):
         if self.presentation:

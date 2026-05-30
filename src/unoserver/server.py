@@ -69,20 +69,25 @@ class UnoServer:
         self.xmlrcp_server = None
         self.intentional_exit = False
 
-    def start(self, executable="libreoffice"):
-        logger.info(f"Starting unoserver {__version__}.")
+    def start(self, executable="libreoffice", headless=True):
+        """
+        Start the UnoServer.
+
+        Args:
+            executable (str): Path to 'soffice' or 'libreoffice' executable.
+            headless (bool): 
+                - True (default): Runs in headless mode → used by conversion workers.
+                - False: Runs in visible mode → required for slideshow functionality.
+        """
+        logger.info(f"Starting unoserver {__version__} | headless={headless}")
 
         connection = (
             "socket,host=%s,port=%s,tcpNoDelay=1;urp;StarOffice.ComponentContext"
             % (self.uno_interface, self.uno_port)
         )
 
-        # I think only --headless and --norestore are needed for
-        # command line usage, but let's add everything to be safe.
         cmd = [
             executable,
-            "--headless",
-            "--invisible",
             "--nocrashreport",
             "--nodefault",
             "--nologo",
@@ -92,22 +97,32 @@ class UnoServer:
             f"--accept={connection}",
         ]
 
-        logger.info("Command: " + " ".join(cmd))
+        if headless:
+            # === Conversion Mode (Current Default) ===
+            cmd.extend(["--headless", "--invisible"])
+            logger.info("Running in HEADLESS mode (conversion)")
+        else:
+            # === Slideshow Mode (Visible + Fullscreen capable) ===
+            cmd.extend(["--show", "--nologo", "--norestore"])
+            logger.info("Running in VISIBLE mode (slideshow)")
+
+        logger.info("Launch command: " + " ".join(cmd))
+
         self.libreoffice_process = subprocess.Popen(cmd)
         self.xmlrcp_thread = threading.Thread(None, self.serve)
 
+        # Signal handlers (unchanged)
         def signal_handler(signum, frame):
             self.intentional_exit = True
             logger.info("Sending signal to LibreOffice")
             try:
                 self.libreoffice_process.send_signal(signum)
             except ProcessLookupError as e:
-                # 3 means the process is already dead
-                if e.errno != 3:
+                if e.errno != 3:  # Process already dead
                     raise
 
             if self.xmlrcp_server is not None:
-                self.stop()  # Ensure the server stops
+                self.stop()
 
         signal.signal(signal.SIGTERM, signal_handler)
         signal.signal(signal.SIGINT, signal_handler)
@@ -116,7 +131,7 @@ class UnoServer:
         if platform.system() != "Windows":
             signal.signal(signal.SIGHUP, signal_handler)
 
-        time.sleep(5)
+        time.sleep(5)   # Give LibreOffice time to start
 
         self.xmlrcp_thread.start()
 
@@ -124,7 +139,7 @@ class UnoServer:
         time.sleep(2)
         # Check if it succeeded
         if not self.xmlrcp_thread.is_alive():
-            logger.info("Failed to start servers")
+            logger.error("Failed to start XML-RPC server thread")
             self.stop()
             return None
 
@@ -571,9 +586,6 @@ class UnoServer:
                     return self.slideshow_sessions[session_id].get_current_slide_index()
                 return -1
             # =====================================================================
-
-            logger.info("Started.")
-            server.serve_forever()
 
             logger.info("Started.")
             server.serve_forever()

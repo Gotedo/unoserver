@@ -134,3 +134,4 @@ dmypy.json
 *.code-workspace
 
 .DS_Store
+.~lock.*
