@@ -3,7 +3,7 @@ import time
 import tempfile
 from pathlib import Path
 
-import unoserver
+from unoserver import server
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "integration: mark test as integration test")
@@ -20,7 +20,7 @@ def is_uno_available() -> bool:
 def server_fixture():
     with tempfile.TemporaryDirectory() as tmpuserdir:
         user_installation = Path(tmpuserdir).as_uri()
-        srvr = unoserver.server.UnoServer(user_installation=user_installation)
+        srvr = server.UnoServer(user_installation=user_installation)
         process = srvr.start()
         # Give libreoffice a chance to start
         time.sleep(8)
@@ -37,7 +37,7 @@ def visible_slideshow_server():
 
     with tempfile.TemporaryDirectory() as tmpuserdir:
         user_installation = Path(tmpuserdir).as_uri()
-        srvr = unoserver.server.UnoServer(
+        srvr = server.UnoServer(
             user_installation=user_installation,
             port="2005",
             uno_port="2004"

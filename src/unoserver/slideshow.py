@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 try:
     import uno
 except ImportError:
@@ -6,8 +8,6 @@ except ImportError:
         "installation that has a 'uno' library. This typically means you should install "
         "it with the same Python executable as your Libreoffice installation uses."
     )
-
-from __future__ import annotations
 
 import logging
 import time

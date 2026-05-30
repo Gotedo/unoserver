@@ -3,6 +3,7 @@
 import os
 import time
 import pytest
+from functools import wraps
 
 try:
     from unoserver import client
@@ -20,6 +21,7 @@ PRESENTATION_FILES = [
 
 def requires_uno(func):
     """Decorator to skip tests that require the 'uno' library"""
+    @wraps(func)
     def wrapper(*args, **kwargs):
         if client is None:
             pytest.skip("Skipping test: 'uno' library not available. "
