@@ -227,24 +227,118 @@ teminate LibreOffice if it takes to long to convert a document, and that termina
 in Unoserver quitting. Because of this service monitoring software should be set up to restart
 Unoserver when it exits.
 
+---
 
-Development and Testing
------------------------
+### Development and Testing
 
-1. Clone the repo from `https://github.com/unoconv/unoserver`.
+To run the tests (especially the slideshow tests), you **must** use the Python bundled with LibreOffice, because it includes the required `uno` library.
 
-2. Setup a virtualenv::
+#### 1. Download and Install LibreOffice
 
-    $ virtualenv --system-site-packages ve
-    $ ve/bin/pip install -e .[devenv]
+- Download the latest stable version of **LibreOffice** from the official website:  
+  [https://www.libreoffice.org/download/download-libreoffice/](https://www.libreoffice.org/download/download-libreoffice/)
+- Install it normally on your system.
 
-3. Run tests::
+#### 2. Clone the Fork
 
-    $ ve/bin/pytest tests
+```bash
+git clone https://github.com/gotedo/unoserver.git
+cd unoserver
+```
 
-4. Run `flake8` linting:
+#### 3. Install the Fork into LibreOffice's Python
 
-    $ ve/bin/flake8 src tests
+**macOS:**
+
+```bash
+LO_PYTHON="$HOME/LibreOffice.app/Contents/Resources/python"
+
+# Install pytest
+"$LO_PYTHON" -m pip install pytest --no-deps
+
+# Install the forked unoserver
+"$LO_PYTHON" -m pip install . \
+    --no-deps \
+    --no-build-isolation \
+    --no-warn-script-location \
+    -e "$HOME/gotedo/unoserver"
+```
+
+**Windows (PowerShell):**
+
+```powershell
+$LO_PYTHON = "$env:USERPROFILE\LibreOffice\program\python.exe"
+
+# Install pytest
+& $LO_PYTHON -m pip install pytest --no-deps
+
+# Install the forked unoserver
+& $LO_PYTHON -m pip install . --no-deps --no-build-isolation --no-warn-script-location `
+    -e "$env:USERPROFILE\gotedo\unoserver"
+```
+
+#### 4. Run the Tests
+
+**Run all tests:**
+
+```bash
+# macOS
+"$HOME/LibreOffice.app/Contents/Resources/python" -m pytest tests -q
+
+# Windows
+& "$env:USERPROFILE\LibreOffice\program\python.exe" -m pytest tests -q
+```
+
+**Run only slideshow tests:**
+
+```bash
+# macOS
+"$HOME/LibreOffice.app/Contents/Resources/python" \
+    -m pytest tests/test_slideshow.py -q --tb=no
+
+# Windows
+& "$env:USERPROFILE\LibreOffice\program\python.exe" `
+    -m pytest tests\test_slideshow.py -q --tb=no
+```
+
+**Run a specific test:**
+
+```bash
+# macOS example
+"$HOME/LibreOffice.app/Contents/Resources/python" \
+    -m pytest tests/test_slideshow.py::test_slideshow_full_workflow -q --tb=short
+```
+
+#### 5. Optional: Create Helper Aliases
+
+**macOS (add to `~/.zshrc` or `~/.bash_profile`):**
+
+```bash
+alias lopip='~/LibreOffice.app/Contents/Resources/python -m pip'
+alias lotest='~/LibreOffice.app/Contents/Resources/python -m pytest'
+```
+
+Then you can simply run:
+
+```bash
+lotest tests/test_slideshow.py -q
+```
+
+#### Platform-Specific Notes
+
+- **macOS**: If you get permission/quarantine issues, run:
+  ```bash
+  xattr -r -d com.apple.quarantine ~/LibreOffice.app
+  ```
+- **Windows**: Always use **PowerShell** (not Command Prompt) for these commands.
+- **Test Files**: Make sure these files exist in `tests/documents/`:
+  - `presentation_test.odp`
+  - `presentation_test.ppt`
+  - `presentation_test.pptx`
+
+---
+
+This version is complete, beginner-friendly, and includes all the lessons we learned during debugging. Would you like me to also add a small helper script (`run_slideshow_tests.sh` / `.ps1`) to make this even easier?
 
 
 Comparison with `unoconv`

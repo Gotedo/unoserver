@@ -304,3 +304,40 @@ def skip_test_compare_not_local():
         process.wait(30)
         # And verify that it was killed
         assert process.returncode == 0
+
+# ====================== SLIDESHOW INTEGRATION TESTS ======================
+
+@pytest.mark.parametrize("start_options", [
+    {"start_slide": 1, "loop": False},
+    {"start_slide": 3, "loop": True},
+])
+def test_slideshow_start_with_options(server_fixture, start_options):
+    clt = client.UnoClient()
+    ppt = os.path.join(TEST_DOCS, "simple.odp")  # Update with real file
+
+    if not os.path.exists(ppt):
+        pytest.skip("No presentation document in test suite")
+
+    session_id = clt.load_presentation(ppt)
+    success = clt.start_slideshow(session_id, start_options)
+    assert success
+
+    clt.next_slide(session_id)
+    assert clt.get_current_slide_index(session_id) >= 0
+
+    clt.end_slideshow(session_id)
+
+
+def test_slideshow_end_cleans_up(server_fixture):
+    clt = client.UnoClient()
+    ppt = os.path.join(TEST_DOCS, "simple.odp")
+
+    if not os.path.exists(ppt):
+        pytest.skip("Presentation not available")
+
+    session_id = clt.load_presentation(ppt)
+    clt.start_slideshow(session_id)
+    clt.end_slideshow(session_id)
+
+    # Further calls should not crash the server
+    clt.next_slide(session_id)  # Should be no-op or handled gracefully
