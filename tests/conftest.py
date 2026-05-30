@@ -111,8 +111,7 @@ def visible_slideshow_server(request):
         srvr = server.UnoServer(
             user_installation=user_installation,
             port="2005",
-            uno_port="2004",
-            presentation_file=presentation_path
+            uno_port="2004"
         )
 
         # Important: Pass executable and let UnoServer use it without forcing headless

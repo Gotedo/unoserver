@@ -47,37 +47,50 @@ class UnoSlideshow:
             "com.sun.star.frame.Desktop", ctx
         )
 
-    def load_presentation(self, path: Optional[str] = None) -> str:
-        """Connect to the currently running presentation or load one."""
+    def load_presentation(self, path: str) -> str:
+        """Connect to LibreOffice, hide UI elements, and load the presentation."""
         if not self.ctx:
             self._connect()
 
+        # 1. Dynamically Disable the Presenter Console Extension
         try:
-            # 1. Grab the document that was automatically opened and started by --show
-            self.document = self.desktop.getCurrentComponent()
-
-            # 2. Fallback: If it wasn't started with --show, load it manually
-            if self.document is None or not hasattr(self.document, "getPresentation"):
-                if not path:
-                    raise RuntimeError("No running presentation found and no path provided.")
-                url = uno.systemPathToFileUrl(path)
-                load_props = (PropertyValue("ReadOnly", 0, True, 0),)
-                self.document = self.desktop.loadComponentFromURL(url, "_blank", 0, load_props)
-
-            if self.document is None:
-                raise RuntimeError("LibreOffice could not find or load the document.")
-
-            # Verify it's a presentation
-            self.presentation = self.document.getPresentation()
-            if self.presentation is None:
-                raise RuntimeError("Loaded document is not a presentation")
-
+            smgr = self.ctx.ServiceManager
+            provider = smgr.createInstanceWithContext(
+                "com.sun.star.configuration.ConfigurationProvider", self.ctx
+            )
+            from com.sun.star.beans import PropertyValue
+            node = PropertyValue("nodepath", 0, "/org.openoffice.Office.PresenterScreen/PresenterScreenSettings", 0)
+            update_access = provider.createInstanceWithArguments(
+                "com.sun.star.configuration.ConfigurationUpdateAccess", (node,)
+            )
+            update_access.setPropertyValue("Enabled", False)
+            update_access.commitChanges()
+            logger.info("Presenter Console dynamically disabled.")
         except Exception as e:
-            logger.error(f"Failed to load presentation: {e}", exc_info=True)
-            raise RuntimeError("Could not load presentation file") from e
+            logger.debug(f"Could not disable Presenter Console (may not be installed): {e}")
+
+        # 2. Load the document normally (Do NOT use Hidden=True, it causes black screens)
+        url = uno.systemPathToFileUrl(path)
+        load_props = (PropertyValue("ReadOnly", 0, True, 0),)
+        
+        self.document = self.desktop.loadComponentFromURL(url, "_blank", 0, load_props)
+        if self.document is None:
+            raise RuntimeError("LibreOffice could not find or load the document.")
+
+        # 3. Hide the main Editor window entirely
+        try:
+            frame = self.document.getCurrentController().getFrame()
+            window = frame.getContainerWindow()
+            window.setVisible(False)
+        except Exception as e:
+            logger.warning(f"Could not hide editor window: {e}")
+
+        self.presentation = self.document.getPresentation()
+        if self.presentation is None:
+            raise RuntimeError("Loaded document is not a presentation")
 
         self.session_id = f"ss_{int(time.time())}_{id(self)}"
-        logger.info(f"✅ Successfully loaded presentation. Session ID: {self.session_id}")
+        logger.info(f"Successfully loaded presentation. Session ID: {self.session_id}")
         return self.session_id
 
     def start(self, options: Dict[str, Any]) -> bool:
