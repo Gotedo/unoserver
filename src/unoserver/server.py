@@ -20,6 +20,8 @@ from concurrent import futures
 
 from unoserver import converter, comparer
 from com.sun.star.uno import Exception as UnoException
+from unoserver.slideshow import UnoSlideshow
+from typing import Dict
 
 API_VERSION = "3"
 __version__ = metadata.version("unoserver")
@@ -514,6 +516,64 @@ class UnoServer:
                 else:
                     stop_after()
                     return result
+
+            # ====================== GOTEDO SLIDESHOW SUPPORT ======================
+            self.slideshow_sessions: Dict[str, UnoSlideshow] = {}
+
+            @server.register_function
+            def load_presentation(path: str) -> str:
+                """Load presentation and return session ID"""
+                slideshow = UnoSlideshow(uno_port=self.uno_port)
+                session_id = slideshow.load_presentation(path)
+                self.slideshow_sessions[session_id] = slideshow
+                return session_id
+
+            @server.register_function
+            def start_slideshow(session_id: str, options: dict = None) -> bool:
+                if session_id not in self.slideshow_sessions:
+                    raise RuntimeError(f"Invalid session: {session_id}")
+                return self.slideshow_sessions[session_id].start(options or {})
+
+            @server.register_function
+            def next_slide(session_id: str):
+                if session_id in self.slideshow_sessions:
+                    self.slideshow_sessions[session_id].next()
+
+            @server.register_function
+            def previous_slide(session_id: str):
+                if session_id in self.slideshow_sessions:
+                    self.slideshow_sessions[session_id].previous()
+
+            @server.register_function
+            def goto_slide(session_id: str, index: int):
+                if session_id in self.slideshow_sessions:
+                    self.slideshow_sessions[session_id].goto_slide(index)
+
+            @server.register_function
+            def pause_slideshow(session_id: str):
+                if session_id in self.slideshow_sessions:
+                    self.slideshow_sessions[session_id].pause()
+
+            @server.register_function
+            def resume_slideshow(session_id: str):
+                if session_id in self.slideshow_sessions:
+                    self.slideshow_sessions[session_id].resume()
+
+            @server.register_function
+            def end_slideshow(session_id: str):
+                if session_id in self.slideshow_sessions:
+                    self.slideshow_sessions[session_id].end()
+                    self.slideshow_sessions.pop(session_id, None)
+
+            @server.register_function
+            def get_current_slide_index(session_id: str) -> int:
+                if session_id in self.slideshow_sessions:
+                    return self.slideshow_sessions[session_id].get_current_slide_index()
+                return -1
+            # =====================================================================
+
+            logger.info("Started.")
+            server.serve_forever()
 
             logger.info("Started.")
             server.serve_forever()
