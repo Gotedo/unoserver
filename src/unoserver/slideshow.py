@@ -112,6 +112,10 @@ class UnoSlideshow:
         if not self.presentation:
             raise RuntimeError("No presentation loaded")
 
+        import platform
+        import subprocess
+        import time
+
         try:
             # Force the LibreOffice engine to wake up and request OS focus BEFORE starting
             # This cures the "black screen waiting for click" issue.
@@ -123,18 +127,40 @@ class UnoSlideshow:
             except Exception as e:
                 logger.debug(f"Could not focus window: {e}")
 
+            # Force the presentation to render on top of everything
+            try:
+                self.presentation.setPropertyValue("IsAlwaysOnTop", True)
+            except Exception as e:
+                logger.debug(f"Could not set IsAlwaysOnTop: {e}")
+
             # Start the presentation
             self.presentation.start()
 
+            # OS-LEVEL OVERRIDE FOR MACOS BLACK SCREEN
+            # We must force macOS to make LibreOffice the active application, 
+            # otherwise the slideshow engine stays paused and never creates the controller.
+            if platform.system() == "Darwin":
+                try:
+                    # Give the window server a split second to register the new fullscreen window
+                    time.sleep(0.5) 
+                    subprocess.run(
+                        ["osascript", "-e", 'tell application "LibreOffice" to activate'],
+                        check=False,
+                        capture_output=True
+                    )
+                    logger.info("macOS Focus Override triggered via osascript.")
+                except Exception as e:
+                    logger.debug(f"macOS activation failed: {e}")
+
             # Wait for the controller to become available
-            controller = None
-            for _ in range(10): # Poll for 5 seconds
+            slideShowController = None
+            for _ in range(60): # Poll for 30 seconds
                 time.sleep(0.5)
-                controller = self.presentation.getController()
-                if controller is not None:
+                slideShowController = self.presentation.getController()
+                if slideShowController is not None:
                     break
 
-            if controller is None:
+            if slideShowController is None:
                 raise RuntimeError("Slideshow started, but controller never became ready.")
 
             # Now that the presentation has safely taken over the screen,
@@ -154,7 +180,7 @@ class UnoSlideshow:
                     draw_pages = self.document.getDrawPages()
                     if 0 <= target_idx < draw_pages.getCount():
                         page = draw_pages.getByIndex(target_idx)
-                        controller.gotoSlide(page)
+                        slideShowController.gotoSlide(page)
                 except Exception as e:
                     logger.warning(f"Could not jump to slide {start_slide}: {e}")
 
