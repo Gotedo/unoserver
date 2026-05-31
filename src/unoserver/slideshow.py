@@ -52,24 +52,30 @@ class UnoSlideshow:
         if not self.ctx:
             self._connect()
 
-        # 1. Dynamically Disable the Presenter Console Extension
+        # 1. Universally Disable the Presenter Console Extension
         try:
-            smgr = self.ctx.ServiceManager
-            provider = smgr.createInstanceWithContext(
-                "com.sun.star.configuration.ConfigurationProvider", self.ctx
+            # Get the default configuration provider via singleton
+            cp = self.ctx.getValueByName(
+                "/singletons/com.sun.star.configuration.theDefaultProvider"
             )
+            
             from com.sun.star.beans import PropertyValue
-            node = PropertyValue("nodepath", 0, "/org.openoffice.Office.PresenterScreen/PresenterScreenSettings", 0)
-            update_access = provider.createInstanceWithArguments(
-                "com.sun.star.configuration.ConfigurationUpdateAccess", (node,)
+            # Target the master switch for the Presenter Screen
+            prop = PropertyValue("nodepath", 0, "/org.openoffice.Office.Impress/Misc/Start", 0)
+            
+            update_access = cp.createInstanceWithArguments(
+                "com.sun.star.configuration.ConfigurationUpdateAccess", (prop,)
             )
-            update_access.setPropertyValue("Enabled", False)
+            
+            # Disable it and commit changes
+            update_access.setPropertyValue("EnablePresenterScreen", False)
             update_access.commitChanges()
-            logger.info("Presenter Console dynamically disabled.")
+            logger.info("Presenter Console globally disabled via configuration.")
         except Exception as e:
-            logger.debug(f"Could not disable Presenter Console (may not be installed): {e}")
+            logger.debug(f"Could not disable Presenter Console: {e}")
 
         # 2. Load the document normally (Do NOT use Hidden=True, it causes black screens)
+        import uno
         url = uno.systemPathToFileUrl(path)
         load_props = (PropertyValue("ReadOnly", 0, True, 0),)
         
@@ -77,17 +83,25 @@ class UnoSlideshow:
         if self.document is None:
             raise RuntimeError("LibreOffice could not find or load the document.")
 
-        # 3. Hide the main Editor window entirely
+        # 3. Move the main Editor window off-screen to avoid focus bugs
         try:
             frame = self.document.getCurrentController().getFrame()
             window = frame.getContainerWindow()
-            window.setVisible(False)
+            # Keep window on-screen to prevent macOS thread suspension, 
+            # but make it virtually invisible (1x1 pixel in the top left corner).
+            window.setPosSize(0, 0, 1, 1, 15)
         except Exception as e:
-            logger.warning(f"Could not hide editor window: {e}")
+            logger.warning(f"Could not move editor window off-screen: {e}")
 
         self.presentation = self.document.getPresentation()
         if self.presentation is None:
             raise RuntimeError("Loaded document is not a presentation")
+
+        # Fallback safeguard: Force the presentation engine to use Display 1
+        try:
+            self.presentation.setPropertyValue("Display", 1)
+        except Exception as e:
+            logger.debug(f"Could not lock display property: {e}")
 
         self.session_id = f"ss_{int(time.time())}_{id(self)}"
         logger.info(f"Successfully loaded presentation. Session ID: {self.session_id}")
@@ -99,7 +113,17 @@ class UnoSlideshow:
             raise RuntimeError("No presentation loaded")
 
         try:
-            # Call start to ensure the engine is running (safe to call if already started by --show)
+            # Force the LibreOffice engine to wake up and request OS focus BEFORE starting
+            # This cures the "black screen waiting for click" issue.
+            try:
+                frame = self.document.getCurrentController().getFrame()
+                window = frame.getContainerWindow()
+                window.toFront()
+                window.setFocus()
+            except Exception as e:
+                logger.debug(f"Could not focus window: {e}")
+
+            # Start the presentation
             self.presentation.start()
 
             # Wait for the controller to become available
@@ -113,9 +137,24 @@ class UnoSlideshow:
             if controller is None:
                 raise RuntimeError("Slideshow started, but controller never became ready.")
 
+            # Now that the presentation has safely taken over the screen,
+            # push the main editor window entirely off-screen so it's fully gone.
+            try:
+                frame = self.document.getCurrentController().getFrame()
+                window = frame.getContainerWindow()
+                window.setPosSize(-10000, -10000, 100, 100, 15)
+            except Exception as e:
+                logger.debug(f"Could not move editor window off-screen: {e}")
+
+            # Jump to the requested slide safely
+            # Fetch the actual XDrawPage object instead of passing an integer
             if start_slide := options.get("start_slide"):
                 try:
-                    controller.gotoSlide(int(start_slide) - 1)
+                    target_idx = int(start_slide) - 1
+                    draw_pages = self.document.getDrawPages()
+                    if 0 <= target_idx < draw_pages.getCount():
+                        page = draw_pages.getByIndex(target_idx)
+                        controller.gotoSlide(page)
                 except Exception as e:
                     logger.warning(f"Could not jump to slide {start_slide}: {e}")
 
@@ -155,13 +194,19 @@ class UnoSlideshow:
 
 
     def goto_slide(self, index: int):
-        """Jump to specific slide (0-based)"""
+        """Jump to specific slide (0-based) using the XDrawPage interface"""
         if not self.presentation:
             return
         try:
             controller = self.presentation.getController()
             if controller:
-                controller.gotoSlide(index)
+                draw_pages = self.document.getDrawPages()
+                if 0 <= index < draw_pages.getCount():
+                    # FIX: Pass the XDrawPage interface, not the integer
+                    page = draw_pages.getByIndex(index)
+                    controller.gotoSlide(page)
+                else:
+                    logger.warning(f"goto_slide failed: index {index} is out of bounds")
             else:
                 logger.warning(f"Controller not available for goto_slide({index})")
         except Exception as e:
