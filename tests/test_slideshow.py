@@ -162,9 +162,6 @@ def test_multiple_concurrent_slideshows():
             # === INSTANCE 1 SEPARATE WORKFLOW RUN ===
             # ==========================================
 
-            # 5. Load the identical document into both instances
-            sid1 = clt1.load_presentation(target_file)
-
             # Define options mapping targeted coordinates (center of each respective monitor)
             m1 = detected_monitors[0]
             opts1 = {
@@ -172,6 +169,9 @@ def test_multiple_concurrent_slideshows():
                 "display_x": m1.x + (m1.width // 2), 
                 "display_y": m1.y + (m1.height // 2)
             }
+
+            # 5. Load the identical document into both instances
+            sid1 = clt1.load_presentation(target_file, opts1)
 
             # 6. Start both slideshows concurrently
             assert clt1.start_slideshow(sid1, opts1) is True
@@ -198,9 +198,6 @@ def test_multiple_concurrent_slideshows():
 
                 clt2 = client.UnoClient(port="2007")
 
-                # 5. Load the identical document into both instances
-                sid2 = clt2.load_presentation(target_file)
-
                 # Define options mapping targeted coordinates (center of each respective monitor)
                 m2 = detected_monitors[1]
                 opts2 = {
@@ -208,6 +205,9 @@ def test_multiple_concurrent_slideshows():
                     "display_x": m2.x + (m2.width // 2), 
                     "display_y": m2.y + (m2.height // 2)
                 }
+
+                # 5. Load the identical document into both instances
+                sid2 = clt2.load_presentation(target_file, opts2)
 
                 # 6. Start both slideshows concurrently
                 assert clt2.start_slideshow(sid2, opts2) is True

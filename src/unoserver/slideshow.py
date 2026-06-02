@@ -65,8 +65,9 @@ class UnoSlideshow:
             "com.sun.star.frame.Desktop", ctx
         )
 
-    def load_presentation(self, path: str) -> str:
+    def load_presentation(self, path: str, options: Dict[str, Any] = None) -> str:
         """Connect to LibreOffice, hide UI elements, and load the presentation."""
+        options = options or {}
         if not self.ctx:
             self._connect()
 
@@ -76,7 +77,7 @@ class UnoSlideshow:
             cp = self.ctx.getValueByName(
                 "/singletons/com.sun.star.configuration.theDefaultProvider"
             )
-            
+
             # Target the master switch for the Presenter Screen
             prop = PropertyValue("nodepath", 0, "/org.openoffice.Office.Impress/Misc/Start", 0)
             
@@ -99,15 +100,59 @@ class UnoSlideshow:
         if self.document is None:
             raise RuntimeError("LibreOffice could not find or load the document.")
 
-        # Instead of setVisible(False), we move the window 10,000 pixels off-screen. 
-        # The OS keeps it active, allowing the slideshow to safely take foreground focus.
+        # Move the main editor window to an alternate monitor
+        # based on the target display coordinates provided in options.
+        target_x = options.get("display_x")
+        target_y = options.get("display_y")
+
+        target_monitor = None
+        alt_monitor = None
+        
+        with self._monitor_lock:
+            current_monitors = list(self.monitors)
+
+        if target_x is not None and target_y is not None:
+            target_x_int, target_y_int = int(target_x), int(target_y)
+            for m in current_monitors:
+                if m.x <= target_x_int < m.x + m.width and m.y <= target_y_int < m.y + m.height:
+                    target_monitor = m
+                    break
+
+        if not target_monitor and current_monitors:
+            target_monitor = current_monitors[0]
+
+        # Find an alternate monitor to stash the editor
+        for m in current_monitors:
+            if m.x != target_monitor.x and m.y != target_monitor.y:
+                alt_monitor = m
+                break
+        
+        # Fallback if only 1 monitor exists
+        if not alt_monitor and current_monitors:
+            alt_monitor = current_monitors[0]
+
         try:
             frame = self.document.getCurrentController().getFrame()
             window = frame.getContainerWindow()
+            
+            # Hide the window from the OS task switcher/view
             window.setVisible(False)
-            logger.debug("Editor window successfully hidden.")
-            # 15 is the PosSize flag (X | Y | WIDTH | HEIGHT)
-            window.setPosSize(-10000, -10000, 1, 1, 15)
+            
+            if alt_monitor:
+                # 15 is the PosSize flag (X | Y | WIDTH | HEIGHT)
+                # Stash it on the alternate monitor scaled down
+                window.setPosSize(
+                    alt_monitor.x,
+                    alt_monitor.y,
+                    1,
+                    1,
+                    15
+                )
+                logger.debug(f"Editor window successfully hidden and moved to alternate monitor at x={alt_monitor.x}, y={alt_monitor.y}")
+            else:
+                # Fallback if screeninfo array was empty
+                window.setPosSize(-10000, -10000, 1, 1, 15)
+                logger.debug("Editor window successfully hidden and moved off-screen.")
         except Exception as e:
             logger.warning(f"Could not move editor window off-screen: {e}")
 
@@ -194,13 +239,6 @@ class UnoSlideshow:
 
             # 5. Wait for the controller to become available
             slideShowController = None
-            
-            # Retrieve the window object for programmatic UNO focus attempts
-            try:
-                frame = self.document.getCurrentController().getFrame()
-                window = frame.getContainerWindow()
-            except Exception:
-                window = None
 
             # Extract target coordinates if available to drive hardware mouse targeting
             target_x = options.get("display_x")
@@ -212,78 +250,6 @@ class UnoSlideshow:
                 if slideShowController is not None:
                     logger.info(f"Slideshow controller acquired successfully on attempt {i+1}.")
                     break
-
-                # --- ACTIVE MAC OS RECOVERY HACKS ---
-                if platform.system() == "Darwin":
-                    logger.debug(f"Controller not ready on attempt {i+1}. Driving active window manager interventions...")
-                    
-                    # Hack 1: Force UNO-level Window Focus
-                    if window:
-                        try:
-                            window.toFront()
-                            window.setFocus()
-                        except Exception as e:
-                            logger.debug(f"Loop Hack 1 (UNO Window Focus) failed: {e}")
-
-                    # Hack 2: Force OS-Level Process Focus via Tracked PID
-                    if self.pid:
-                        try:
-                            script_focus = f'''
-                            tell application "System Events"
-                                try
-                                    set target_proc to first process whose unix id is {self.pid}
-                                    set frontmost of target_proc to true
-                                end try
-                            end tell
-                            '''
-                            subprocess.run(["osascript", "-e", script_focus], check=False, capture_output=True)
-                        except Exception as e:
-                            logger.debug(f"Loop Hack 2 (OS Process Focus) failed: {e}")
-
-                    # Hack 3: HARDWARE MOUSE CLICK (The Secondary Monitor Breakthrough)
-                    # We fire this on attempts 2, 5, and 8 to give the OS a decisive push 
-                    # without over-clicking and blocking user interaction.
-                    # if target_x is not None and target_y is not None and i in (1, 4, 7):
-                    #     try:
-                    #         # Use cliclick if available, or fall back to standard AppleScript click events
-                    #         click_script = f'''
-                    #         tell application "System Events"
-                    #             -- Synthesize a clean physical hardware click at the exact monitor coordinates
-                    #             click at {{{target_x}, {target_y}}}
-                    #         end tell
-                    #         '''
-                    #         subprocess.run(["osascript", "-e", click_script], check=False, capture_output=True)
-                    #         logger.debug(f"Loop Hack 3 (Hardware Mouse Click) executed at ({target_x}, {target_y})")
-                    #     except Exception as e:
-                    #         logger.debug(f"Loop Hack 3 (Hardware Mouse Click) failed: {e}")
-
-                    if target_x is not None and target_y is not None and i in (1, 4, 7):
-                        try:
-                            # 'c' tells cliclick to perform a true hardware click at the exact coordinates
-                            cmd = ["cliclick", f"c:{target_x},{target_y}"]
-                            subprocess.run(cmd, check=False, capture_output=True)
-                            logger.debug(f"Loop Hack 3 (cliclick Kernel Mouse Click) executed at ({target_x}, {target_y})")
-                        except Exception as e:
-                            logger.debug(f"cliclick execution failed: {e}")
-
-                    # Hack 4: Send Non-Invasive Redraw Keystrokes directly to the process
-                    if self.pid:
-                        try:
-                            script_keys = f'''
-                            tell application "System Events"
-                                try
-                                    set target_proc to first process whose unix id is {self.pid}
-                                    if frontmost of target_proc is true then
-                                        key code 56 -- Shift Key
-                                        delay 0.05
-                                        key code 58 -- Option Key
-                                    end if
-                                end try
-                            end tell
-                            '''
-                            subprocess.run(["osascript", "-e", script_keys], check=False, capture_output=True)
-                        except Exception as e:
-                            logger.debug(f"Loop Hack 4 (Keystroke Injection) failed: {e}")
 
             if slideShowController is None:
                 raise RuntimeError("Slideshow started, but controller never became ready.")

@@ -7,6 +7,7 @@ import warnings
 
 from importlib import metadata
 from xmlrpc.client import ServerProxy
+from typing import Dict
 
 __version__ = metadata.version("unoserver")
 logger = logging.getLogger("unoserver")
@@ -280,11 +281,12 @@ class UnoClient:
 
     # ====================== SLIDESHOW SUPPORT (Added by Gotedo) ======================
 
-    def load_presentation(self, path: str) -> str:
+    def load_presentation(self, path: str, options: Dict[str, Any] = None) -> str:
         """Load a presentation and return a session ID."""
+        opts = options or {}
         with ServerProxy(f"{self.protocol}://{self.server}:{self.port}", allow_none=True) as proxy:
             self._connect(proxy)
-            return proxy.load_presentation(path)
+            return proxy.load_presentation(path, opts)
 
     def start_slideshow(self, session_id: str, options: dict = None) -> bool:
         """Start slideshow on a specific display with options."""
