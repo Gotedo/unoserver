@@ -186,7 +186,7 @@ class UnoSlideshow:
             # 7. Jump to the requested slide safely
             if start_slide := options.get("start_slide"):
                 try:
-                    target_idx = int(start_slide) - 1 # Assuming start_slide is 1-indexed
+                    target_idx = int(start_slide)
                     draw_pages = self.document.getDrawPages()
                     if 0 <= target_idx < draw_pages.getCount():
                         page = draw_pages.getByIndex(target_idx)

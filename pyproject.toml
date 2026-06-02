@@ -20,11 +20,18 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
 ]
 keywords = ["libreoffice", "conversion", "documents", "uno", "unoconv"]
-authors = [{name = "Lennart Regebro", email = "regebro@gmail.com"}]
+authors = [
+    {name = "Lennart Regebro", email = "regebro@gmail.com"},
+    { name = "Ndianabasi Udonkang", email = "ndianabasi.udonkang@gmail.com" }
+]
 license = {text = "MIT"}
 urls = {Homepage = "https://github.com/unoconv/unoserver"}
 dynamic = ["readme"]
 requires-python = ">= 3.8"
+
+dependencies = [
+    "screeninfo>=0.8",
+]
 
 [project.optional-dependencies]
 devenv = [

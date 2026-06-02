@@ -3,12 +3,15 @@
 import os
 import time
 import pytest
+import tempfile
+from pathlib import Path
 from functools import wraps
 
 try:
-    from unoserver import client
+    from unoserver import client, server
 except ImportError:
     client = None
+    server = None
 
 TEST_DOCS = os.path.join(os.path.abspath(os.path.split(__file__)[0]), "documents")
 
@@ -100,27 +103,88 @@ def test_slideshow_options(visible_slideshow_server, filename):
     clt.end_slideshow(session_id)
 
 
+@pytest.mark.integration
 @requires_uno
-def test_multiple_concurrent_slideshows(visible_slideshow_server):
-    """Test managing multiple slideshow sessions simultaneously"""
-    _, _ = visible_slideshow_server
-    clt = client.UnoClient(port="2005")
-
-    active_sessions = []
+def test_multiple_concurrent_slideshows():
+    """
+    Robustly test managing multiple independent LibreOffice instances 
+    and slideshow sessions simultaneously via different ports.
+    """
+    # 1. Find the first available presentation file
+    target_file = None
     for fname in PRESENTATION_FILES:
         path = os.path.join(TEST_DOCS, fname)
         if os.path.exists(path):
-            sid = clt.load_presentation(path)
-            clt.start_slideshow(sid, {"start_slide": 0})
-            active_sessions.append(sid)
+            target_file = path
+            break
+            
+    if not target_file:
+        pytest.skip("No presentation files found for testing.")
 
-    # Interact with them
-    for i, sid in enumerate(active_sessions):
-        clt.goto_slide(sid, i + 2)
+    # 2. Create entirely isolated user profiles for the two instances
+    with tempfile.TemporaryDirectory() as tmp1, tempfile.TemporaryDirectory() as tmp2:
+        install_url_1 = Path(tmp1).as_uri()
+        install_url_2 = Path(tmp2).as_uri()
 
-    # Cleanup
-    for sid in active_sessions:
-        clt.end_slideshow(sid)
+        # Instance 1: UNO Port 2004, RPC Port 2005
+        srvr1 = server.UnoServer(user_installation=install_url_1, port="2005", uno_port="2004")
+        
+        # Instance 2: UNO Port 2006, RPC Port 2007
+        srvr2 = server.UnoServer(user_installation=install_url_2, port="2007", uno_port="2006")
+
+        sid1 = sid2 = None
+
+        try:
+            # 3. Start both servers
+            # Note: Slideshows strictly require headless=False, but our hidden document 
+            # architecture ensures the UI remains completely invisible to the user.
+            from .conftest import find_soffice_executable 
+            executable = find_soffice_executable()
+            
+            srvr1.start(executable=executable, headless=False)
+            srvr2.start(executable=executable, headless=False)
+            
+            # Allow time for both heavy LibreOffice C++ engines to boot up
+            time.sleep(10)
+
+            # 4. Connect independent clients
+            clt1 = client.UnoClient(port="2005")
+            clt2 = client.UnoClient(port="2007")
+
+            # 5. Load the identical document into both instances
+            sid1 = clt1.load_presentation(target_file)
+            sid2 = clt2.load_presentation(target_file)
+
+            # 6. Start both slideshows concurrently
+            assert clt1.start_slideshow(sid1, {"start_slide": 0}) is True
+            assert clt2.start_slideshow(sid2, {"start_slide": 0}) is True
+
+            time.sleep(3) # Give both macOS window contexts time to paint
+
+            # 7. CONCURRENT CONTROL: Move them to different slides
+            clt1.goto_slide(sid1, 2)  # Instance 1 -> Slide 3 (0-indexed)
+            clt2.goto_slide(sid2, 4)  # Instance 2 -> Slide 5 (0-indexed)
+            
+            time.sleep(1) # Allow transition animations to finish
+
+            # 8. ASSERT INDEPENDENCE
+            idx1 = clt1.get_current_slide_index(sid1)
+            idx2 = clt2.get_current_slide_index(sid2)
+
+            assert idx1 == 2, f"Instance 1 state corrupted. Expected slide index 2, got {idx1}"
+            assert idx2 == 4, f"Instance 2 state corrupted. Expected slide index 4, got {idx2}"
+
+        finally:
+            # 9. Guaranteed Cleanup (Even if assertions fail)
+            if sid1:
+                try: clt1.end_slideshow(sid1)
+                except Exception: pass
+            if sid2:
+                try: clt2.end_slideshow(sid2)
+                except Exception: pass
+            
+            srvr1.stop()
+            srvr2.stop()
 
 
 @pytest.mark.integration

@@ -254,11 +254,10 @@ cd unoserver
 LO_PYTHON="$HOME/LibreOffice.app/Contents/Resources/python"
 
 # Install pytest
-"$LO_PYTHON" -m pip install pytest --no-deps
+"$LO_PYTHON" -m pip install pytest
 
 # Install the forked unoserver
 "$LO_PYTHON" -m pip install . \
-    --no-deps \
     --no-build-isolation \
     --no-warn-script-location \
     -e "$HOME/gotedo/unoserver"
@@ -270,10 +269,10 @@ LO_PYTHON="$HOME/LibreOffice.app/Contents/Resources/python"
 $LO_PYTHON = "$env:USERPROFILE\LibreOffice\program\python.exe"
 
 # Install pytest
-& $LO_PYTHON -m pip install pytest --no-deps
+& $LO_PYTHON -m pip install pytest
 
 # Install the forked unoserver
-& $LO_PYTHON -m pip install . --no-deps --no-build-isolation --no-warn-script-location `
+& $LO_PYTHON -m pip install . --no-build-isolation --no-warn-script-location `
     -e "$env:USERPROFILE\gotedo\unoserver"
 ```
 
