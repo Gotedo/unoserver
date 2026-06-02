@@ -83,6 +83,18 @@ class UnoSlideshow:
         if self.document is None:
             raise RuntimeError("LibreOffice could not find or load the document.")
 
+        # Instead of setVisible(False), we move the window 10,000 pixels off-screen. 
+        # The OS keeps it active, allowing the slideshow to safely take foreground focus.
+        try:
+            frame = self.document.getCurrentController().getFrame()
+            window = frame.getContainerWindow()
+            window.setVisible(False)
+            logger.debug("Editor window successfully hidden.")
+            # 15 is the PosSize flag (X | Y | WIDTH | HEIGHT)
+            window.setPosSize(-10000, -10000, 1, 1, 15)
+        except Exception as e:
+            logger.warning(f"Could not move editor window off-screen: {e}")
+
         self.presentation = self.document.getPresentation()
         if self.presentation is None:
             raise RuntimeError("Loaded document is not a presentation")
@@ -126,7 +138,7 @@ class UnoSlideshow:
             except Exception as e:
                 logger.debug(f"Could not set IsAlwaysOnTop: {e}")
 
-            # 3. THE DISPATCHER (The Fix)
+            # 3. THE DISPATCHER
             # Simulates a native UI interaction (pressing F5), which forces macOS 
             # to properly paint the window and prevents the black screen deadlock.
             try:
@@ -141,7 +153,16 @@ class UnoSlideshow:
                 logger.warning(f"Dispatcher failed, falling back to UNO API: {e}")
                 self.presentation.start()
 
-            # 4. Wait for the controller to become available
+            # 4. Consume options
+            if loop := options.get("loop", False):
+                try:
+                    self.presentation.setPropertyValue("IsEndless", bool(loop))
+                    # Seamless loop (0 seconds pause between restarts)
+                    self.presentation.setPropertyValue("Pause", 0)
+                except Exception as e:
+                    logger.debug(f"Could not set IsEndless loop property: {e}")
+
+            # 5. Wait for the controller to become available
             slideShowController = None
             for _ in range(30): # Poll for 15 seconds
                 time.sleep(0.5)
@@ -152,7 +173,7 @@ class UnoSlideshow:
             if slideShowController is None:
                 raise RuntimeError("Slideshow started, but controller never became ready.")
 
-            # 5. HIDE THE EDITOR
+            # 6. HIDE THE EDITOR
             # Now that the presentation has safely taken over the screen, turn the editor invisible.
             try:
                 frame = self.document.getCurrentController().getFrame()
@@ -162,7 +183,7 @@ class UnoSlideshow:
             except Exception as e:
                 logger.debug(f"Could not hide editor window: {e}")
 
-            # 6. Jump to the requested slide safely
+            # 7. Jump to the requested slide safely
             if start_slide := options.get("start_slide"):
                 try:
                     target_idx = int(start_slide) - 1 # Assuming start_slide is 1-indexed
@@ -217,7 +238,7 @@ class UnoSlideshow:
             if controller:
                 draw_pages = self.document.getDrawPages()
                 if 0 <= index < draw_pages.getCount():
-                    # FIX: Pass the XDrawPage interface, not the integer
+                    # Pass the XDrawPage interface, not the integer
                     page = draw_pages.getByIndex(index)
                     controller.gotoSlide(page)
                 else:
@@ -275,3 +296,17 @@ class UnoSlideshow:
             self.document = None
         self.presentation = None
         self.is_running = False
+
+    def get_settings(self) -> Dict[str, Any]:
+        """Retrieve the current properties of the active presentation."""
+        if not self.presentation:
+            return {}
+        try:
+            return {
+                "loop": self.presentation.getPropertyValue("IsEndless"),
+                "pause": self.presentation.getPropertyValue("Pause"),
+                "is_always_on_top": self.presentation.getPropertyValue("IsAlwaysOnTop")
+            }
+        except Exception as e:
+            logger.warning(f"Could not fetch presentation settings: {e}")
+            return {}

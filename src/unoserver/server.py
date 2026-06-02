@@ -633,6 +633,15 @@ class UnoServer:
                 if session_id in self.slideshow_sessions:
                     return self.slideshow_sessions[session_id].get_current_slide_index()
                 return -1
+
+            @server.register_function
+            def get_slideshow_settings(session_id: str) -> dict:
+                """RPC method to get the current settings of a slideshow session."""
+                if session_id in self.slideshow_sessions:
+                    return self.slideshow_sessions[session_id].get_settings()
+                
+                logger.warning(f"Settings requested for unknown session: {session_id}")
+                return {}
             # =====================================================================
 
             logger.info("Started.")

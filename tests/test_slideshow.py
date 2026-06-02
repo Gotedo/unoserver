@@ -47,7 +47,7 @@ def test_slideshow_full_workflow(visible_slideshow_server, filename):
     assert session_id.startswith(("ss_", "slideshow_"))
 
     # Start
-    success = clt.start_slideshow(session_id, {"start_slide": 1, "loop": False})
+    success = clt.start_slideshow(session_id, {"start_slide": 0, "loop": False})
     assert success is True
 
     time.sleep(5)
@@ -83,9 +83,18 @@ def test_slideshow_options(visible_slideshow_server, filename):
         pytest.skip(f"File not found: {filename}")
 
     session_id = clt.load_presentation(ppt_path)
+    
+    # Start with loop enabled
     assert clt.start_slideshow(session_id, {"start_slide": 3, "loop": True}) is True
 
+    # 1. Assert that the loop setting was actually applied to the UNO engine
+    settings = clt.get_slideshow_settings(session_id)
+    assert settings.get("loop") is True
+    assert settings.get("pause") == 0  # We set pause to 0 for seamless looping
+
+    # 2. Assert navigation
     clt.goto_slide(session_id, 5)
+    time.sleep(1) # Give the slide a moment to transition
     assert clt.get_current_slide_index(session_id) >= 3
 
     clt.end_slideshow(session_id)
@@ -102,7 +111,7 @@ def test_multiple_concurrent_slideshows(visible_slideshow_server):
         path = os.path.join(TEST_DOCS, fname)
         if os.path.exists(path):
             sid = clt.load_presentation(path)
-            clt.start_slideshow(sid, {"start_slide": 1})
+            clt.start_slideshow(sid, {"start_slide": 0})
             active_sessions.append(sid)
 
     # Interact with them

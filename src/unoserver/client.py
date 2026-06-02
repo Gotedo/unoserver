@@ -335,6 +335,14 @@ class UnoClient:
             self._connect(proxy)
             return proxy.get_current_slide_index(session_id)
 
+    def get_slideshow_settings(self, session_id: str) -> dict:
+        """
+        Fetch the current configuration of the running slideshow.
+        Returns a dictionary containing 'loop', 'pause', etc.
+        """
+        with ServerProxy(f"{self.protocol}://{self.server}:{self.port}", allow_none=True) as proxy:
+            return proxy.get_slideshow_settings(session_id)
+
     # ===============================================================================
 
 
