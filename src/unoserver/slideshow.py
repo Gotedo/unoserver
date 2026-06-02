@@ -11,11 +11,16 @@ except ImportError:
 
 import logging
 import time
+import threading
+import platform
+import subprocess
 from typing import Any, Dict, Optional
 
 from com.sun.star.presentation import XPresentation2
 from com.sun.star.frame import XController
 from com.sun.star.beans import PropertyValue
+
+from screeninfo import get_monitors
 
 logger = logging.getLogger("unoserver.slideshow")
 
@@ -32,6 +37,17 @@ class UnoSlideshow:
         self.controller = None
         self.session_id = None
         self.is_running = False
+
+        # Monitor Caching State
+        self.monitors = []
+        self._monitor_lock = threading.Lock()
+        self._stop_monitor_event = threading.Event()
+        self._monitor_thread = None
+
+        # Fetch immediately on init so they are ready for the first start() call
+        self._update_monitors()
+        # Start the 10-second ticker thread
+        self._start_monitor_ticker()
 
     def _connect(self):
         """Connect to LibreOffice UNO."""
@@ -59,7 +75,6 @@ class UnoSlideshow:
                 "/singletons/com.sun.star.configuration.theDefaultProvider"
             )
             
-            from com.sun.star.beans import PropertyValue
             # Target the master switch for the Presenter Screen
             prop = PropertyValue("nodepath", 0, "/org.openoffice.Office.Impress/Misc/Start", 0)
             
@@ -75,7 +90,6 @@ class UnoSlideshow:
             logger.debug(f"Could not disable Presenter Console: {e}")
 
         # 2. Load the document normally (No size hacks, no Hidden=True)
-        import uno
         url = uno.systemPathToFileUrl(path)
         load_props = (PropertyValue("ReadOnly", 0, True, 0),)
         
@@ -99,12 +113,6 @@ class UnoSlideshow:
         if self.presentation is None:
             raise RuntimeError("Loaded document is not a presentation")
 
-        # 3. Fallback safeguard: Force the presentation engine to use Display 1
-        try:
-            self.presentation.setPropertyValue("Display", 1)
-        except Exception as e:
-            logger.debug(f"Could not lock display property: {e}")
-
         self.session_id = f"ss_{int(time.time())}_{id(self)}"
         logger.info(f"Successfully loaded presentation. Session ID: {self.session_id}")
         return self.session_id
@@ -113,10 +121,6 @@ class UnoSlideshow:
         """Start the slideshow using the GUI Dispatcher to prevent macOS window desync."""
         if not self.presentation:
             raise RuntimeError("No presentation loaded")
-
-        import platform
-        import subprocess
-        import time
 
         try:
             # 1. Bring LibreOffice to the foreground BEFORE starting
@@ -137,6 +141,25 @@ class UnoSlideshow:
                 self.presentation.setPropertyValue("IsAlwaysOnTop", True)
             except Exception as e:
                 logger.debug(f"Could not set IsAlwaysOnTop: {e}")
+
+            # Target specific display via coordinates
+            if "display_x" in options and "display_y" in options:
+                target_display = self._get_display_index_for_coords(
+                    int(options["display_x"]), 
+                    int(options["display_y"])
+                )
+                try:
+                    # Apply the resolved 1-based integer index to LibreOffice
+                    self.presentation.setPropertyValue("Display", target_display)
+                    logger.info(f"Targeting slideshow to Display {target_display} for coords ({options['display_x']}, {options['display_y']})")
+                except Exception as e:
+                    logger.warning(f"Could not set Display property: {e}")
+            else:
+                # Default fallback if no coordinates are provided
+                try:
+                    self.presentation.setPropertyValue("Display", 1)
+                except Exception:
+                    pass
 
             # 3. THE DISPATCHER
             # Simulates a native UI interaction (pressing F5), which forces macOS 
@@ -257,7 +280,10 @@ class UnoSlideshow:
             self.presentation.getController().resume()
 
     def end(self):
-        """End the slideshow and completely destroy the hidden document."""
+        """End the slideshow, shut down background tickers, and destroy the document."""
+        # Shut down the tick
+        self.stop_monitor_ticker()
+
         if self.presentation:
             try:
                 self.presentation.end()
@@ -267,7 +293,6 @@ class UnoSlideshow:
             logger.info(f"Slideshow ended (session {self.session_id})")
         
         # Give macOS a split second to destroy the fullscreen space
-        import time
         time.sleep(0.5)
         
         # Instantly and forcefully close the document so the LibreOffice 
@@ -290,7 +315,15 @@ class UnoSlideshow:
         return 0
 
     def close(self):
-        """Clean up resources."""
+        """Clean up resources and stop background threads."""
+        # Stop the background monitor ticker instantly
+        if hasattr(self, '_stop_monitor_event'):
+            self._stop_monitor_event.set()
+            if self._monitor_thread and self._monitor_thread.is_alive():
+                # Give it a fraction of a second to shut down cleanly
+                self._monitor_thread.join(timeout=0.5)
+
+        # Existing UNO cleanup
         if self.document:
             self.document.close(True)
             self.document = None
@@ -310,3 +343,115 @@ class UnoSlideshow:
         except Exception as e:
             logger.warning(f"Could not fetch presentation settings: {e}")
             return {}
+
+    def _update_monitors(self):
+        """Fetch displays from the OS and safely update the cache."""
+        try:
+            fresh_monitors = get_monitors()
+            
+            # Use lock to safely update the shared list
+            with self._monitor_lock:
+                self.monitors = fresh_monitors
+                
+        except ImportError:
+            logger.warning("screeninfo library not found. Run: pip install screeninfo")
+            with self._monitor_lock:
+                self.monitors = []
+        except Exception as e:
+            logger.warning(f"Error fetching monitors in background thread: {e}")
+
+    def _start_monitor_ticker(self):
+        """Starts a background thread that updates monitors every 10 seconds."""
+        def ticker():
+            while not self._stop_monitor_event.is_set():
+                # wait() blocks for 10 seconds. If the stop event is triggered 
+                # during those 10 seconds, it returns True and we break instantly.
+                if self._stop_monitor_event.wait(10.0):
+                    break
+                self._update_monitors()
+
+        # Set as daemon so it won't prevent Python from exiting if left orphaned
+        self._monitor_thread = threading.Thread(target=ticker, daemon=True)
+        self._monitor_thread.start()
+        logger.debug("Monitor caching background ticker started.")
+
+    def stop_monitor_ticker(self):
+        """Forcefully and cleanly shut down the background monitor ticker thread."""
+        if hasattr(self, '_stop_monitor_event') and not self._stop_monitor_event.is_set():
+            logger.debug(f"Stopping monitor ticker thread for session: {self.session_id}")
+            # Signal the event to break the wait loop immediately
+            self._stop_monitor_event.set()
+
+            # Join the thread to ensure it is dead before moving on
+            if self._monitor_thread and self._monitor_thread.is_alive():
+                self._monitor_thread.join(timeout=1.0)
+                logger.debug("Monitor ticker thread joined successfully.")
+
+    def __del__(self):
+        """Ensure the background thread doesn't leak if the object is garbage collected."""
+        try:
+            self.stop_monitor_ticker()
+        except Exception:
+            pass
+
+    def _update_monitors(self):
+        """Fetch displays from the OS and safely update the cache."""
+        try:
+            from screeninfo import get_monitors
+            fresh_monitors = get_monitors()
+            
+            # Use lock to safely update the shared list
+            with self._monitor_lock:
+                self.monitors = fresh_monitors
+                
+        except ImportError:
+            logger.warning("screeninfo library not found. Run: pip install screeninfo")
+            with self._monitor_lock:
+                self.monitors = []
+        except Exception as e:
+            logger.warning(f"Error fetching monitors in background thread: {e}")
+
+    def _start_monitor_ticker(self):
+        """Starts a background thread that updates monitors every 10 seconds."""
+        def ticker():
+            while not self._stop_monitor_event.is_set():
+                # wait() blocks for 10 seconds. If the stop event is triggered 
+                # during those 10 seconds, it returns True and we break instantly.
+                if self._stop_monitor_event.wait(10.0):
+                    break
+                self._update_monitors()
+
+        # Set as daemon so it won't prevent Python from exiting if left orphaned
+        self._monitor_thread = threading.Thread(target=ticker, daemon=True)
+        self._monitor_thread.start()
+        logger.debug("Monitor caching background ticker started.")
+
+    def _get_display_index_for_coords(self, x: int, y: int) -> int:
+        """
+        Finds the 1-based LibreOffice display index containing the (x, y) coordinates
+        using the cached monitor list.
+        """
+        # Safely read from the cache
+        with self._monitor_lock:
+            current_monitors = list(self.monitors)
+
+        # Fallback to Display 1 if cache is empty (e.g., missing library)
+        if not current_monitors:
+            return 1
+
+        min_dist = float('inf')
+        nearest_index = 1
+
+        # LibreOffice Display property is 1-based
+        for i, m in enumerate(current_monitors, start=1):
+            if m.x <= x < m.x + m.width and m.y <= y < m.y + m.height:
+                return i
+
+            m_center_x = m.x + (m.width / 2)
+            m_center_y = m.y + (m.height / 2)
+            dist = abs(x - m_center_x) + abs(y - m_center_y)
+            if dist < min_dist:
+                min_dist = dist
+                nearest_index = i
+
+        return nearest_index
