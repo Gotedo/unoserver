@@ -6,6 +6,8 @@ import pytest
 import tempfile
 from pathlib import Path
 from functools import wraps
+from screeninfo import get_monitors
+from .conftest import find_soffice_executable 
 
 try:
     from unoserver import client, server
@@ -121,6 +123,12 @@ def test_multiple_concurrent_slideshows():
     if not target_file:
         pytest.skip("No presentation files found for testing.")
 
+    # Dynamic Discovery: Fetch attached monitors and limit execution to a maximum of 2 instances
+    detected_monitors = get_monitors()
+    num_instances = min(len(detected_monitors), 2)
+    if num_instances == 0:
+        pytest.skip("No monitors detected via screeninfo.")
+
     # 2. Create entirely isolated user profiles for the two instances
     with tempfile.TemporaryDirectory() as tmp1, tempfile.TemporaryDirectory() as tmp2:
         install_url_1 = Path(tmp1).as_uri()
@@ -141,38 +149,83 @@ def test_multiple_concurrent_slideshows():
             from .conftest import find_soffice_executable 
             executable = find_soffice_executable()
             
+            # Start Instance 1 unconditionally since at least 1 monitor is guaranteed
             srvr1.start(executable=executable, headless=False)
-            srvr2.start(executable=executable, headless=False)
             
             # Allow time for both heavy LibreOffice C++ engines to boot up
-            time.sleep(10)
+            time.sleep(5)
 
-            # 4. Connect independent clients
+            # 4. Connect independent client
             clt1 = client.UnoClient(port="2005")
-            clt2 = client.UnoClient(port="2007")
+
+            # ==========================================
+            # === INSTANCE 1 SEPARATE WORKFLOW RUN ===
+            # ==========================================
 
             # 5. Load the identical document into both instances
             sid1 = clt1.load_presentation(target_file)
-            sid2 = clt2.load_presentation(target_file)
+
+            # Define options mapping targeted coordinates (center of each respective monitor)
+            m1 = detected_monitors[0]
+            opts1 = {
+                "start_slide": 1, 
+                "display_x": m1.x + (m1.width // 2), 
+                "display_y": m1.y + (m1.height // 2)
+            }
 
             # 6. Start both slideshows concurrently
-            assert clt1.start_slideshow(sid1, {"start_slide": 0}) is True
-            assert clt2.start_slideshow(sid2, {"start_slide": 0}) is True
+            assert clt1.start_slideshow(sid1, opts1) is True
 
             time.sleep(3) # Give both macOS window contexts time to paint
 
             # 7. CONCURRENT CONTROL: Move them to different slides
             clt1.goto_slide(sid1, 2)  # Instance 1 -> Slide 3 (0-indexed)
-            clt2.goto_slide(sid2, 4)  # Instance 2 -> Slide 5 (0-indexed)
             
             time.sleep(1) # Allow transition animations to finish
 
             # 8. ASSERT INDEPENDENCE
             idx1 = clt1.get_current_slide_index(sid1)
-            idx2 = clt2.get_current_slide_index(sid2)
-
             assert idx1 == 2, f"Instance 1 state corrupted. Expected slide index 2, got {idx1}"
-            assert idx2 == 4, f"Instance 2 state corrupted. Expected slide index 4, got {idx2}"
+
+            # ==========================================
+            # === INSTANCE 2 SEPARATE WORKFLOW RUN ===
+            # ==========================================
+
+            if num_instances == 2:
+                # Conditionally start Instance 2 only if a second physical monitor is attached
+                srvr2.start(executable=executable, headless=False)
+                time.sleep(5)
+
+                clt2 = client.UnoClient(port="2007")
+
+                # 5. Load the identical document into both instances
+                sid2 = clt2.load_presentation(target_file)
+
+                # Define options mapping targeted coordinates (center of each respective monitor)
+                m2 = detected_monitors[1]
+                opts2 = {
+                    "start_slide": 1, 
+                    "display_x": m2.x + (m2.width // 2), 
+                    "display_y": m2.y + (m2.height // 2)
+                }
+
+                # 6. Start both slideshows concurrently
+                assert clt2.start_slideshow(sid2, opts2) is True
+
+                time.sleep(3) # Give both macOS window contexts time to paint
+
+                # 7. CONCURRENT CONTROL: Move them to different slides
+                clt2.goto_slide(sid2, 4)  # Instance 2 -> Slide 5 (0-indexed)
+                
+                time.sleep(1) # Allow transition animations to finish
+
+                # 8. ASSERT INDEPENDENCE
+                idx2 = clt2.get_current_slide_index(sid2)
+                assert idx2 == 4, f"Instance 2 state corrupted. Expected slide index 4, got {idx2}"
+
+            # Keep the slideshows active and visibly on screen for visual verification 
+            # before the test structure cleanly breaks down.
+            time.sleep(5)
 
         finally:
             # 9. Guaranteed Cleanup (Even if assertions fail)

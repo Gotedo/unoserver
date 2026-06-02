@@ -231,13 +231,13 @@ Unoserver when it exits.
 
 ### Development and Testing
 
-To run the tests (especially the slideshow tests), you **must** use the Python bundled with LibreOffice, because it includes the required `uno` library.
+To run the tests, you **must** use a Python environment tied to the interpreter bundled with LibreOffice, because it includes the required binary `uno` library bindings.
 
 #### 1. Download and Install LibreOffice
 
-- Download the latest stable version of **LibreOffice** from the official website:  
-  [https://www.libreoffice.org/download/download-libreoffice/](https://www.libreoffice.org/download/download-libreoffice/)
-- Install it normally on your system.
+* Download the latest stable version of **LibreOffice** from the official website:
+[https://www.libreoffice.org/download/download-libreoffice/](https://www.libreoffice.org/download/download-libreoffice/)
+* Install it normally on your system.
 
 #### 2. Clone the Fork
 
@@ -246,94 +246,116 @@ git clone https://github.com/gotedo/unoserver.git
 cd unoserver
 ```
 
-#### 3. Install the Fork into LibreOffice's Python
+#### 3. Set Up and Activate the Python Virtual Environment (ve)
+
+Instead of targeting LibreOffice's deeply nested Python executable for every command, we create an isolated virtual environment (`ve`) powered directly by LibreOffice's native engine.
 
 **macOS:**
 
 ```bash
+# Define path to LibreOffice's internal Python
 LO_PYTHON="$HOME/LibreOffice.app/Contents/Resources/python"
 
-# Install pytest
-"$LO_PYTHON" -m pip install pytest
+# Create the virtual environment named 've'
+"$LO_PYTHON" -m venv ve
 
-# Install the forked unoserver
-"$LO_PYTHON" -m pip install . \
-    --no-build-isolation \
-    --no-warn-script-location \
-    -e "$HOME/gotedo/unoserver"
+# Activate the virtual environment
+source ve/bin/activate
+
 ```
 
 **Windows (PowerShell):**
 
 ```powershell
+# Define path to LibreOffice's internal Python
 $LO_PYTHON = "$env:USERPROFILE\LibreOffice\program\python.exe"
 
-# Install pytest
-& $LO_PYTHON -m pip install pytest
+# Create the virtual environment named 've'
+& $LO_PYTHON -m venv ve
 
-# Install the forked unoserver
-& $LO_PYTHON -m pip install . --no-build-isolation --no-warn-script-location `
-    -e "$env:USERPROFILE\gotedo\unoserver"
+# Activate the virtual environment
+.\ve\Scripts\Activate.ps1
+
 ```
 
-#### 4. Run the Tests
+> 💡 **CRITICAL NOTE FOR MAC OS USER LOGOUTS:**
+> If you log out of macOS or restart your system to apply settings, your terminal session will close.
+> When you open a new terminal window, you **must re-activate the environment** before running your tests or server instances:
+> ```bash
+> cd unoserver
+> source ve/bin/activate
+> 
+> ```
+> 
+> 
+
+#### 4. Install Dependencies inside the Activated Environment
+
+Once your virtual environment is active, your terminal's standard `python` and `pip` commands point directly to LibreOffice's runtime. You no longer need to pass binary absolute paths.
+
+```bash
+# Install development and testing dependencies (pytest, screeninfo, etc.)
+pip install -e ".[devenv]" --no-build-isolation --no-warn-script-location
+
+```
+
+#### 5. Run the Tests
+
+With the virtual environment (`ve`) activated, execution commands are clean, cross-platform, and direct:
 
 **Run all tests:**
 
 ```bash
-# macOS
-"$HOME/LibreOffice.app/Contents/Resources/python" -m pytest tests -q
+python -m pytest tests -q
 
-# Windows
-& "$env:USERPROFILE\LibreOffice\program\python.exe" -m pytest tests -q
 ```
 
 **Run only slideshow tests:**
 
 ```bash
-# macOS
-"$HOME/LibreOffice.app/Contents/Resources/python" \
-    -m pytest tests/test_slideshow.py -q --tb=no
+python -m pytest tests/test_slideshow.py -q --tb=no
 
-# Windows
-& "$env:USERPROFILE\LibreOffice\program\python.exe" `
-    -m pytest tests\test_slideshow.py -q --tb=no
 ```
 
 **Run a specific test:**
 
 ```bash
-# macOS example
-"$HOME/LibreOffice.app/Contents/Resources/python" \
-    -m pytest tests/test_slideshow.py::test_slideshow_full_workflow -q --tb=short
+python -m pytest tests/test_slideshow.py::test_multiple_concurrent_slideshows -q --tb=short -s
+
 ```
 
-#### 5. Optional: Create Helper Aliases
+#### 6. Optional: Create Helper Aliases
+
+If you regularly open new shells and want to skip typing activation paths, you can add shortcuts to your shell configuration files.
 
 **macOS (add to `~/.zshrc` or `~/.bash_profile`):**
 
 ```bash
-alias lopip='~/LibreOffice.app/Contents/Resources/python -m pip'
-alias lotest='~/LibreOffice.app/Contents/Resources/python -m pytest'
+alias unove='cd ~/gotedo/unoserver && source ve/bin/activate'
+
 ```
 
-Then you can simply run:
+Then, in any fresh terminal window (even after an OS logout), you can instantly prepare your context by executing:
 
 ```bash
-lotest tests/test_slideshow.py -q
+unove
+
 ```
 
 #### Platform-Specific Notes
 
-- **macOS**: If you get permission/quarantine issues, run:
-  ```bash
-  xattr -r -d com.apple.quarantine ~/LibreOffice.app
-  ```
-- **Windows**: Always use **PowerShell** (not Command Prompt) for these commands.
-- **Test Files**: Make sure these files exist in `tests/documents/`:
-  - `presentation_test.odp`
-  - `presentation_test.ppt`
-  - `presentation_test.pptx`
+* **macOS**: If you get permission/quarantine issues when LibreOffice windows attempt to map screen contexts, run:
+```bash
+xattr -r -d com.apple.quarantine ~/LibreOffice.app
+
+```
+
+
+* **Windows**: Always use **PowerShell** (not Command Prompt) for executing these environment steps.
+* **Test Files**: Make sure these files exist in `tests/documents/`:
+* `presentation_test.odp`
+* `presentation_test.ppt`
+* `presentation_test.pptx`
 
 ---
 

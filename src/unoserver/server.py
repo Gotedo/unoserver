@@ -586,7 +586,8 @@ class UnoServer:
             @server.register_function
             def load_presentation(path: str) -> str:
                 """Load presentation and return session ID"""
-                slideshow = UnoSlideshow(uno_port=self.uno_port)
+                pid = self.libreoffice_process.pid if self.libreoffice_process else None
+                slideshow = UnoSlideshow(uno_port=self.uno_port, pid=pid)
                 session_id = slideshow.load_presentation(path)
                 self.slideshow_sessions[session_id] = slideshow
                 return session_id

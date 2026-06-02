@@ -28,7 +28,7 @@ logger = logging.getLogger("unoserver.slideshow")
 class UnoSlideshow:
     """Manages a single long-running LibreOffice slideshow session."""
 
-    def __init__(self, uno_port: str = "2002"):
+    def __init__(self, uno_port: str = "2002", pid: Optional[int] = None):
         self.uno_port = uno_port
         self.ctx = None
         self.desktop = None
@@ -48,6 +48,8 @@ class UnoSlideshow:
         self._update_monitors()
         # Start the 10-second ticker thread
         self._start_monitor_ticker()
+
+        self.pid = pid  # Store the explicit PID passed from the server
 
     def _connect(self):
         """Connect to LibreOffice UNO."""
@@ -124,17 +126,22 @@ class UnoSlideshow:
 
         try:
             # 1. Bring LibreOffice to the foreground BEFORE starting
-            # The app must hold OS focus for the Dispatcher command to execute cleanly.
-            if platform.system() == "Darwin":
+            # The app must hold OS focus for the window/rendering pipeline to execute cleanly.
+            if platform.system() == "Darwin" and self.pid:
                 try:
-                    subprocess.run(
-                        ["osascript", "-e", 'tell application "LibreOffice" to activate'],
-                        check=False, capture_output=True
-                    )
-                    time.sleep(0.5) # Give macOS a moment to transition focus
-                    logger.debug("LibreOffice brought to foreground.")
+                    script = f'''
+                    tell application "System Events"
+                        try
+                            set target_proc to first process whose unix id is {self.pid}
+                            set frontmost of target_proc to true
+                        end try
+                    end tell
+                    '''
+                    subprocess.run(["osascript", "-e", script], check=False, capture_output=True)
+                    time.sleep(0.5)
+                    logger.debug(f"LibreOffice instance (PID {self.pid}) brought to foreground.")
                 except Exception as e:
-                    logger.debug(f"macOS activation failed: {e}")
+                    logger.debug(f"macOS PID activation failed: {e}")
 
             # 2. Force the presentation to render on top of everything
             try:
@@ -187,26 +194,101 @@ class UnoSlideshow:
 
             # 5. Wait for the controller to become available
             slideShowController = None
-            for _ in range(30): # Poll for 15 seconds
+            
+            # Retrieve the window object for programmatic UNO focus attempts
+            try:
+                frame = self.document.getCurrentController().getFrame()
+                window = frame.getContainerWindow()
+            except Exception:
+                window = None
+
+            # Extract target coordinates if available to drive hardware mouse targeting
+            target_x = options.get("display_x")
+            target_y = options.get("display_y")
+
+            for i in range(30): # Poll for 15 seconds
                 time.sleep(0.5)
                 slideShowController = self.presentation.getController()
                 if slideShowController is not None:
+                    logger.info(f"Slideshow controller acquired successfully on attempt {i+1}.")
                     break
+
+                # --- ACTIVE MAC OS RECOVERY HACKS ---
+                if platform.system() == "Darwin":
+                    logger.debug(f"Controller not ready on attempt {i+1}. Driving active window manager interventions...")
+                    
+                    # Hack 1: Force UNO-level Window Focus
+                    if window:
+                        try:
+                            window.toFront()
+                            window.setFocus()
+                        except Exception as e:
+                            logger.debug(f"Loop Hack 1 (UNO Window Focus) failed: {e}")
+
+                    # Hack 2: Force OS-Level Process Focus via Tracked PID
+                    if self.pid:
+                        try:
+                            script_focus = f'''
+                            tell application "System Events"
+                                try
+                                    set target_proc to first process whose unix id is {self.pid}
+                                    set frontmost of target_proc to true
+                                end try
+                            end tell
+                            '''
+                            subprocess.run(["osascript", "-e", script_focus], check=False, capture_output=True)
+                        except Exception as e:
+                            logger.debug(f"Loop Hack 2 (OS Process Focus) failed: {e}")
+
+                    # Hack 3: HARDWARE MOUSE CLICK (The Secondary Monitor Breakthrough)
+                    # We fire this on attempts 2, 5, and 8 to give the OS a decisive push 
+                    # without over-clicking and blocking user interaction.
+                    # if target_x is not None and target_y is not None and i in (1, 4, 7):
+                    #     try:
+                    #         # Use cliclick if available, or fall back to standard AppleScript click events
+                    #         click_script = f'''
+                    #         tell application "System Events"
+                    #             -- Synthesize a clean physical hardware click at the exact monitor coordinates
+                    #             click at {{{target_x}, {target_y}}}
+                    #         end tell
+                    #         '''
+                    #         subprocess.run(["osascript", "-e", click_script], check=False, capture_output=True)
+                    #         logger.debug(f"Loop Hack 3 (Hardware Mouse Click) executed at ({target_x}, {target_y})")
+                    #     except Exception as e:
+                    #         logger.debug(f"Loop Hack 3 (Hardware Mouse Click) failed: {e}")
+
+                    if target_x is not None and target_y is not None and i in (1, 4, 7):
+                        try:
+                            # 'c' tells cliclick to perform a true hardware click at the exact coordinates
+                            cmd = ["cliclick", f"c:{target_x},{target_y}"]
+                            subprocess.run(cmd, check=False, capture_output=True)
+                            logger.debug(f"Loop Hack 3 (cliclick Kernel Mouse Click) executed at ({target_x}, {target_y})")
+                        except Exception as e:
+                            logger.debug(f"cliclick execution failed: {e}")
+
+                    # Hack 4: Send Non-Invasive Redraw Keystrokes directly to the process
+                    if self.pid:
+                        try:
+                            script_keys = f'''
+                            tell application "System Events"
+                                try
+                                    set target_proc to first process whose unix id is {self.pid}
+                                    if frontmost of target_proc is true then
+                                        key code 56 -- Shift Key
+                                        delay 0.05
+                                        key code 58 -- Option Key
+                                    end if
+                                end try
+                            end tell
+                            '''
+                            subprocess.run(["osascript", "-e", script_keys], check=False, capture_output=True)
+                        except Exception as e:
+                            logger.debug(f"Loop Hack 4 (Keystroke Injection) failed: {e}")
 
             if slideShowController is None:
                 raise RuntimeError("Slideshow started, but controller never became ready.")
 
-            # 6. HIDE THE EDITOR
-            # Now that the presentation has safely taken over the screen, turn the editor invisible.
-            try:
-                frame = self.document.getCurrentController().getFrame()
-                window = frame.getContainerWindow()
-                window.setVisible(False)
-                logger.debug("Editor window hidden successfully.")
-            except Exception as e:
-                logger.debug(f"Could not hide editor window: {e}")
-
-            # 7. Jump to the requested slide safely
+            # 6. Jump to the requested slide safely
             if start_slide := options.get("start_slide"):
                 try:
                     target_idx = int(start_slide)
