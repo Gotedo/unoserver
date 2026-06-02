@@ -74,7 +74,7 @@ class UnoSlideshow:
         except Exception as e:
             logger.debug(f"Could not disable Presenter Console: {e}")
 
-        # 2. Load the document normally (Do NOT use Hidden=True, it causes black screens)
+        # 2. Load the document normally (No size hacks, no Hidden=True)
         import uno
         url = uno.systemPathToFileUrl(path)
         load_props = (PropertyValue("ReadOnly", 0, True, 0),)
@@ -83,21 +83,11 @@ class UnoSlideshow:
         if self.document is None:
             raise RuntimeError("LibreOffice could not find or load the document.")
 
-        # 3. Move the main Editor window off-screen to avoid focus bugs
-        try:
-            frame = self.document.getCurrentController().getFrame()
-            window = frame.getContainerWindow()
-            # Keep window on-screen to prevent macOS thread suspension, 
-            # but make it virtually invisible (1x1 pixel in the top left corner).
-            window.setPosSize(0, 0, 1, 1, 15)
-        except Exception as e:
-            logger.warning(f"Could not move editor window off-screen: {e}")
-
         self.presentation = self.document.getPresentation()
         if self.presentation is None:
             raise RuntimeError("Loaded document is not a presentation")
 
-        # Fallback safeguard: Force the presentation engine to use Display 1
+        # 3. Fallback safeguard: Force the presentation engine to use Display 1
         try:
             self.presentation.setPropertyValue("Display", 1)
         except Exception as e:
@@ -108,7 +98,7 @@ class UnoSlideshow:
         return self.session_id
 
     def start(self, options: Dict[str, Any]) -> bool:
-        """Start the slideshow or connect to the already running controller."""
+        """Start the slideshow using the GUI Dispatcher to prevent macOS window desync."""
         if not self.presentation:
             raise RuntimeError("No presentation loaded")
 
@@ -117,44 +107,43 @@ class UnoSlideshow:
         import time
 
         try:
-            # Force the LibreOffice engine to wake up and request OS focus BEFORE starting
-            # This cures the "black screen waiting for click" issue.
-            try:
-                frame = self.document.getCurrentController().getFrame()
-                window = frame.getContainerWindow()
-                window.toFront()
-                window.setFocus()
-            except Exception as e:
-                logger.debug(f"Could not focus window: {e}")
+            # 1. Bring LibreOffice to the foreground BEFORE starting
+            # The app must hold OS focus for the Dispatcher command to execute cleanly.
+            if platform.system() == "Darwin":
+                try:
+                    subprocess.run(
+                        ["osascript", "-e", 'tell application "LibreOffice" to activate'],
+                        check=False, capture_output=True
+                    )
+                    time.sleep(0.5) # Give macOS a moment to transition focus
+                    logger.debug("LibreOffice brought to foreground.")
+                except Exception as e:
+                    logger.debug(f"macOS activation failed: {e}")
 
-            # Force the presentation to render on top of everything
+            # 2. Force the presentation to render on top of everything
             try:
                 self.presentation.setPropertyValue("IsAlwaysOnTop", True)
             except Exception as e:
                 logger.debug(f"Could not set IsAlwaysOnTop: {e}")
 
-            # Start the presentation
-            self.presentation.start()
+            # 3. THE DISPATCHER (The Fix)
+            # Simulates a native UI interaction (pressing F5), which forces macOS 
+            # to properly paint the window and prevents the black screen deadlock.
+            try:
+                frame = self.document.getCurrentController().getFrame()
+                dispatch_helper = self.ctx.ServiceManager.createInstanceWithContext(
+                    "com.sun.star.frame.DispatchHelper", self.ctx
+                )
+                # Fire the internal command for "Start Slideshow"
+                dispatch_helper.executeDispatch(frame, ".uno:Presentation", "", 0, ())
+                logger.debug("Slideshow triggered via UI Dispatcher.")
+            except Exception as e:
+                logger.warning(f"Dispatcher failed, falling back to UNO API: {e}")
+                self.presentation.start()
 
-            # OS-LEVEL OVERRIDE FOR MACOS BLACK SCREEN
-            # We must force macOS to make LibreOffice the active application, 
-            # otherwise the slideshow engine stays paused and never creates the controller.
-            if platform.system() == "Darwin":
-                try:
-                    # Give the window server a split second to register the new fullscreen window
-                    time.sleep(0.5) 
-                    subprocess.run(
-                        ["osascript", "-e", 'tell application "LibreOffice" to activate'],
-                        check=False,
-                        capture_output=True
-                    )
-                    logger.info("macOS Focus Override triggered via osascript.")
-                except Exception as e:
-                    logger.debug(f"macOS activation failed: {e}")
-
-            # Wait for the controller to become available
+            # 4. Wait for the controller to become available
             slideShowController = None
-            for _ in range(60): # Poll for 30 seconds
+            for _ in range(30): # Poll for 15 seconds
                 time.sleep(0.5)
                 slideShowController = self.presentation.getController()
                 if slideShowController is not None:
@@ -163,20 +152,20 @@ class UnoSlideshow:
             if slideShowController is None:
                 raise RuntimeError("Slideshow started, but controller never became ready.")
 
-            # Now that the presentation has safely taken over the screen,
-            # push the main editor window entirely off-screen so it's fully gone.
+            # 5. HIDE THE EDITOR
+            # Now that the presentation has safely taken over the screen, turn the editor invisible.
             try:
                 frame = self.document.getCurrentController().getFrame()
                 window = frame.getContainerWindow()
-                window.setPosSize(-10000, -10000, 100, 100, 15)
+                window.setVisible(False)
+                logger.debug("Editor window hidden successfully.")
             except Exception as e:
-                logger.debug(f"Could not move editor window off-screen: {e}")
+                logger.debug(f"Could not hide editor window: {e}")
 
-            # Jump to the requested slide safely
-            # Fetch the actual XDrawPage object instead of passing an integer
+            # 6. Jump to the requested slide safely
             if start_slide := options.get("start_slide"):
                 try:
-                    target_idx = int(start_slide) - 1
+                    target_idx = int(start_slide) - 1 # Assuming start_slide is 1-indexed
                     draw_pages = self.document.getDrawPages()
                     if 0 <= target_idx < draw_pages.getCount():
                         page = draw_pages.getByIndex(target_idx)
@@ -247,10 +236,27 @@ class UnoSlideshow:
             self.presentation.getController().resume()
 
     def end(self):
+        """End the slideshow and completely destroy the hidden document."""
         if self.presentation:
-            self.presentation.end()
+            try:
+                self.presentation.end()
+            except Exception:
+                pass
             self.is_running = False
             logger.info(f"Slideshow ended (session {self.session_id})")
+        
+        # Give macOS a split second to destroy the fullscreen space
+        import time
+        time.sleep(0.5)
+        
+        # Instantly and forcefully close the document so the LibreOffice 
+        # engine drops all stale window hierarchies for the next run.
+        if self.document:
+            try:
+                self.document.close(True)
+            except Exception as e:
+                logger.debug(f"Could not cleanly close document: {e}")
+            self.document = None
 
     def get_current_slide_index(self) -> int:
         if self.presentation and self.presentation.getController():

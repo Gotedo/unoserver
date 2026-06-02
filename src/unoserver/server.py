@@ -17,6 +17,7 @@ from importlib import metadata
 from pathlib import Path
 
 from concurrent import futures
+from .process_proxy import ExistingProcessProxy
 
 from unoserver import converter, comparer
 from com.sun.star.uno import Exception as UnoException
@@ -80,35 +81,81 @@ class UnoServer:
                 - False: Runs in visible mode → required for slideshow functionality.
         """
         logger.info(f"Starting unoserver {__version__} | headless={headless}")
+        
+        # Define a port-specific lock file
+        # E.g., /tmp/unoserver_2004.pid
+        pid_file_path = os.path.join(tempfile.gettempdir(), f"unoserver_{self.uno_port}.pid")
+        existing_process_found = False
 
-        connection = (
-            "socket,host=%s,port=%s,tcpNoDelay=1;urp;StarOffice.ComponentContext"
-            % (self.uno_interface, self.uno_port)
-        )
+        # Check if the instance already exists
+        if os.path.exists(pid_file_path):
+            try:
+                with open(pid_file_path, "rt") as f:
+                    existing_pid = int(f.read().strip())
+                
+                if self._is_process_running(existing_pid):
+                    logger.info(f"LibreOffice is already running on port {self.uno_port} (PID: {existing_pid}).")
+                    
+                    # If headful, bring the existing window to the front
+                    if not headless:
+                        self._focus_existing_instance(existing_pid)
+                        
+                    # Wrap the PID in our duck-typed proxy
+                    self.libreoffice_process = ExistingProcessProxy(existing_pid)
+                    existing_process_found = True
+                    
+                    # We DO NOT return early here anymore. 
+                    # The LibreOffice engine is running, but this specific Python invocation 
+                    # still needs to start its own XML-RPC server thread below so the client can connect.
+                else:
+                    logger.info("Found stale PID file. Removing and starting fresh...")
+                    os.unlink(pid_file_path)
+            except Exception as e:
+                logger.warning(f"Error checking existing PID file: {e}")
 
-        cmd = [
-            executable,
-            "--nocrashreport",
-            "--nodefault",
-            "--nologo",
-            "--nofirststartwizard",
-            "--norestore",
-            f"-env:UserInstallation={self.user_installation}",
-            f"--accept={connection}",
-        ]
+        # Only spawn a new process if one isn't already running
+        if not existing_process_found:
+            connection = (
+                "socket,host=%s,port=%s,tcpNoDelay=1;urp;StarOffice.ComponentContext"
+                % (self.uno_interface, self.uno_port)
+            )
 
-        if headless:
-            # === Conversion Mode ===
-            cmd.extend(["--headless", "--invisible"])
-            logger.info("Running in HEADLESS mode (conversion)")
-        else:
-            cmd.extend(["--nologo", "--norestore"])
-            # '--show' is not used. We will handle the instant launch programmatically via UNO below.
-            logger.info(f"Running in VISIBLE mode (slideshow)")
+            cmd = [
+                executable,
+                "--nocrashreport",
+                "--nodefault",
+                "--nologo",
+                "--nofirststartwizard",
+                "--norestore",
+                f"-env:UserInstallation={self.user_installation}",
+                f"--accept={connection}",
+            ]
 
-        logger.info("Launch command: " + " ".join(cmd))
+            if headless:
+                # === Conversion Mode ===
+                cmd.extend(["--headless", "--invisible"])
+                logger.info("Running in HEADLESS mode (conversion)")
+            else:
+                cmd.extend(["--nologo", "--norestore"])
+                # '--show' is not used. We will handle the instant launch programmatically via UNO below.
+                logger.info(f"Running in VISIBLE mode (slideshow)")
 
-        self.libreoffice_process = subprocess.Popen(cmd)
+            logger.info("Launch command: " + " ".join(cmd))
+
+            self.libreoffice_process = subprocess.Popen(cmd)
+            
+            # Write the new PID to the port-specific lock file
+            try:
+                with open(pid_file_path, "wt") as f:
+                    f.write(str(self.libreoffice_process.pid))
+            except Exception as e:
+                logger.warning(f"Could not write PID file: {e}")
+
+            time.sleep(5)   # Give LibreOffice time to start
+
+
+        # === ALWAYS set up the XML-RPC thread and signal handlers ===
+        
         self.xmlrcp_thread = threading.Thread(None, self.serve)
 
         # Signal handlers (unchanged)
@@ -118,7 +165,8 @@ class UnoServer:
             try:
                 self.libreoffice_process.send_signal(signum)
             except ProcessLookupError as e:
-                if e.errno != 3:  # Process already dead
+                # Handle AttributeError gracefully in case 'e' lacks 'errno'
+                if getattr(e, 'errno', None) != 3:  # Process already dead
                     raise
 
             if self.xmlrcp_server is not None:
@@ -614,6 +662,43 @@ class UnoServer:
             except subprocess.TimeoutExpired:
                 logger.info("Signalling harder...")
                 self.libreoffice_process.terminate()
+
+    def _is_process_running(self, pid: int) -> bool:
+        """Check if a process with the given PID is currently active in the OS."""
+        import os
+        try:
+            # os.kill with signal 0 does not kill the process; 
+            # it only checks if you have permission to signal it (i.e., it exists).
+            os.kill(pid, 0)
+            return True
+        except OSError:
+            return False
+
+    def _focus_existing_instance(self, pid: int):
+        """Bring an existing LibreOffice instance to the foreground based on its PID."""
+        import platform
+        import subprocess
+        import logging
+        
+        logger = logging.getLogger("unoserver")
+        
+        if platform.system() == "Darwin":
+            try:
+                # Use AppleScript to target the exact process by its Unix ID (PID)
+                script = f'''
+                tell application "System Events"
+                    set target_proc to first process whose unix id is {pid}
+                    set frontmost of target_proc to true
+                end tell
+                '''
+                subprocess.run(["osascript", "-e", script], check=False, capture_output=True)
+                logger.info(f"Brought existing LibreOffice instance (PID {pid}) to foreground.")
+            except Exception as e:
+                logger.debug(f"Failed to focus existing macOS instance: {e}")
+                
+        elif platform.system() == "Windows":
+            # On Windows, you can use pywin32, or rely on UNO to grab focus later
+            pass
 
 
 def main():
