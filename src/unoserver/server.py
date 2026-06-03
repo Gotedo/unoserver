@@ -18,6 +18,7 @@ from pathlib import Path
 
 from concurrent import futures
 from .process_proxy import ExistingProcessProxy
+from .resource_tracker import ResourceTracker
 
 from unoserver import converter, comparer
 from com.sun.star.uno import Exception as UnoException
@@ -69,6 +70,7 @@ class UnoServer:
         self.xmlrcp_thread = None
         self.xmlrcp_server = None
         self.intentional_exit = False
+        self.tracker = ResourceTracker()
 
     def start(self, executable="libreoffice", headless=True):
         """
@@ -153,9 +155,10 @@ class UnoServer:
 
             time.sleep(5)   # Give LibreOffice time to start
 
+        # Start the CPU/memory tracker thread
+        self.tracker.start(self.uno_port)
 
         # === ALWAYS set up the XML-RPC thread and signal handlers ===
-        
         self.xmlrcp_thread = threading.Thread(None, self.serve)
 
         # Signal handlers (unchanged)
@@ -580,7 +583,6 @@ class UnoServer:
                     stop_after()
                     return result
 
-            # ====================== GOTEDO SLIDESHOW SUPPORT ======================
             self.slideshow_sessions: Dict[str, UnoSlideshow] = {}
 
             @server.register_function
@@ -643,7 +645,13 @@ class UnoServer:
                 
                 logger.error(f"Settings requested for unknown session: {session_id}")
                 return {}
-            # =====================================================================
+
+            @server.register_function
+            def get_usage(port):
+                """Returns aggregated CPU and Memory usage for the tracked process."""
+                if str(port) != str(self.uno_port):
+                    return None
+                return self.tracker.get_summaries()
 
             logger.info("Started.")
             server.serve_forever()
@@ -672,6 +680,8 @@ class UnoServer:
             except subprocess.TimeoutExpired:
                 logger.info("Signalling harder...")
                 self.libreoffice_process.terminate()
+
+        self.tracker.stop()
 
     def _is_process_running(self, pid: int) -> bool:
         """Check if a process with the given PID is currently active in the OS."""

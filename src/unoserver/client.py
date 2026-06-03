@@ -279,8 +279,6 @@ class UnoClient:
             print(f"Unoserver {info['unoserver']}")
             print(f"API version {info['api']}")
 
-    # ====================== SLIDESHOW SUPPORT (Added by Gotedo) ======================
-
     def load_presentation(self, path: str, options: Dict[str, Any] = None) -> str:
         """Load a presentation and return a session ID."""
         opts = options or {}
@@ -345,7 +343,12 @@ class UnoClient:
         with ServerProxy(f"{self.protocol}://{self.server}:{self.port}", allow_none=True) as proxy:
             return proxy.get_slideshow_settings(session_id)
 
-    # ===============================================================================
+    def get_usage(self, target_port):
+        """Fetches the aggregated 5s, 15s, and 60s resource usage of the slideshow process."""
+        with ServerProxy(
+            f"{self.protocol}://{self.server}:{self.port}", allow_none=True
+        ) as proxy:
+            return proxy.get_usage(str(target_port))
 
 
 def converter_main():
