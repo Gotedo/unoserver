@@ -227,6 +227,94 @@ Capabilities:
 
    To resolve this manually, the user is required to click on the black window in order to activate the slideshow. No automated interventions has worked so far.
 
+
+Slideshow Management
+--------------------
+
+Unoserver provides a dedicated module for managing long-running LibreOffice slideshow sessions. This is designed for applications that need programmatic control over presentations, including multi-monitor targeting and real-time navigation.
+
+To use the slideshow functionalities, initialize an ``UnoClient`` and connect to a running server port.
+
+.. code-block:: python
+
+    from unoserver.client import UnoClient
+
+    # Connect to the server managing the presentation
+    client = UnoClient(server="127.0.0.1", port="2003")
+
+    # 1. Load a Presentation
+    # You can target specific displays using X/Y coordinates. 
+    # Unoserver will automatically map this to the correct physical monitor.
+    options = {
+        "display_x": 1920,  # X-coordinate of the target monitor
+        "display_y": 0,     # Y-coordinate of the target monitor
+        "start_slide": 0    # 0-based index
+    }
+    
+    # Returns a unique session ID for the loaded document
+    session_id = client.load_presentation("/path/to/presentation.odp", options)
+
+    # 2. Start the Slideshow
+    client.start_slideshow(session_id, options)
+
+    # 3. Navigation and Control
+    client.next_slide(session_id)
+    client.previous_slide(session_id)
+    
+    # Jump to a specific slide (0-based index)
+    client.goto_slide(session_id, 4)
+
+    # 4. Teardown
+    client.stop_slideshow(session_id)
+
+
+Resource Telemetry (RPC)
+------------------------
+
+When running automated or long-lived presentation processes, you may want to track system overhead. Unoserver exposes a lightweight, non-blocking XML-RPC method to poll the CPU and memory usage of the underlying LibreOffice process.
+
+The telemetry engine runs in a background thread, aggregating resource data into rolling windows to ensure the RPC fetch remains lightning-fast and doesn't block your client application.
+
+.. code-block:: python
+
+    from unoserver.client import UnoClient
+
+    # Connect to the server managing the presentation
+    # The port specified here is the XML-RPC server port
+    client = UnoClient(server="127.0.0.1", port="2003")
+
+    # Fetch the resource usage by passing the underlying LibreOffice UNO port
+    # Note: Pass the UNO port (e.g., 2002), not the XML-RPC server port (e.g., 2003)
+    usage = client.get_usage(target_port="2002")
+
+    if usage:
+        print(usage["5s"])   # Average over the last 5 seconds
+        print(usage["15s"])  # Average over the last 15 seconds
+        print(usage["60s"])  # Average over the last 1 minute
+
+**Response Payload:**
+
+If the process is running and tracked, the method returns a dictionary containing the ``5s``, ``15s``, and ``60s`` summaries. If the process is dead or untracked, the values will be ``None``.
+
+Each time window contains the following data points:
+
+* ``cpu_percent`` *(float)*: The calculated CPU utilization percentage.
+* ``mem_bytes`` *(int)*: The Resident Set Size (RSS) memory in bytes.
+* ``mem_percent`` *(float)*: The percentage of total system memory used by the process.
+
+.. code-block:: python
+
+    # Example Response
+    {
+        "5s": {
+            "cpu_percent": 12.5,
+            "mem_bytes": 145829888, 
+            "mem_percent": 0.8
+        },
+        "15s": { ... },
+        "60s": { ... }
+    }
+
 Client/Server installations
 ---------------------------
 
