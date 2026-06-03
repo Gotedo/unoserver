@@ -238,6 +238,13 @@ To use the slideshow functionalities, initialize an ``UnoClient`` and connect to
 .. code-block:: python
 
     from unoserver.client import UnoClient
+    from unoserver.server import UnoServer
+
+    # Create a server
+    server = UnoServer(user_installation=install_url_1, port="2003", uno_port="2004")
+    # Pass in a specific LibreOffice executable (optional)
+    # Important: Mark the session as `headful`
+    server.start(executable=executable, headless=False)
 
     # Connect to the server managing the presentation
     client = UnoClient(server="127.0.0.1", port="2003")
@@ -252,7 +259,7 @@ To use the slideshow functionalities, initialize an ``UnoClient`` and connect to
     }
     
     # Returns a unique session ID for the loaded document
-    session_id = client.load_presentation("/path/to/presentation.odp", options)
+    session_id = client.load_presentation("/path/to/presentation.odp")
 
     # 2. Start the Slideshow
     client.start_slideshow(session_id, options)
