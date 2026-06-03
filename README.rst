@@ -1,7 +1,7 @@
 unoserver
 =========
 
-Using LibreOffice as a server for converting documents.
+Using LibreOffice as a server for converting and comparing documents, and running slideshows for presentations.
 
 Overview
 --------
@@ -205,6 +205,27 @@ Unoping
 * `--verbose`: Increase informational output to logs.
 * `--quiet`: Decrease informational output to logs.
 
+UnoSlideshow
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The `UnoSlideshow` infrastructure provides programmatic control over headful, hardware-accelerated presentation renderings. It allows independent clients to initialize slide transitions, query frame states, and drive displays cleanly across complex multi-monitor layouts.
+
+Capabilities:
+^^^^^^^^^^^^^
+
+1. **Monitor Caching & Ticker Polling:** Upon initialization, the system safely interrogates the operating system topology via `screeninfo` and caches monitor coordinates. A background daemon thread manages a 10-second ticker to continually update the monitor geometry cache, allowing for instant zero-latency coordinate mappings when starting sessions. This ticker shuts down cleanly via an event cancel pattern during session destruction to prevent memory or thread leaks.
+
+2. **Cross-Display Coordinate Resolution:**
+   Clients do not pass arbitrary, brittle 1-based display integers. Instead, they pass absolute geometric layout coordinates (`display_x` and `display_y`). The module maps those values against its layout cache to target the proper display, securely handling complex physical arrangements—including secondary screens running in negative coordinate spaces (e.g., positioned to the left of the primary display).
+
+3. **Isolated Multi-Session Orchestration:**
+   By combining unique `user_installation` variables per `UnoServer` runtime with specific XML-RPC session ids (`session_id`), the architecture handles fully independent, concurrent slideshows executing on separate ports and monitors simultaneously without cross-process pollution.
+
+.. note::
+   **CONCURRENT SLIDESHOWS ON MACOS:**
+   When orchestrating multiple concurrent slideshows on macOS, a timing issue within the macOS WindowServer may cause secondary instances to render as a black window. 
+
+   To resolve this manually, the user is required to click on the black window in order to activate the slideshow. No automated interventions has worked so far.
 
 Client/Server installations
 ---------------------------
@@ -279,16 +300,15 @@ $LO_PYTHON = "$env:USERPROFILE\LibreOffice\program\python.exe"
 .\ve\Scripts\Activate.ps1
 
 
+.. critical::
+   **CRITICAL NOTE FOR MACOS USER LOGOUTS:**
 
-> 💡 **CRITICAL NOTE FOR MAC OS USER LOGOUTS:**
-> If you log out of macOS or restart your system to apply settings, your terminal session will close.
-> When you open a new terminal window, you **must re-activate the environment** before running your tests or server instances:
-> .. code::
->
-> cd unoserver
-> source ve/bin/activate
-> 
->
+   If you log out of macOS or restart your system to apply settings, your terminal session will close. When you open a new terminal window, you **must re-activate the virtual environment** before running your tests or server instances:
+
+   .. code-block:: bash
+
+      cd unoserver
+      source ve/bin/activate
 
 #### 4. Install Dependencies inside the Activated Environment
 
