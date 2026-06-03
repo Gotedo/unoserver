@@ -111,7 +111,7 @@ class UnoServer:
                     logger.info("Found stale PID file. Removing and starting fresh...")
                     os.unlink(pid_file_path)
             except Exception as e:
-                logger.warning(f"Error checking existing PID file: {e}")
+                logger.error(f"Error checking existing PID file: {e}")
 
         # Only spawn a new process if one isn't already running
         if not existing_process_found:
@@ -149,7 +149,7 @@ class UnoServer:
                 with open(pid_file_path, "wt") as f:
                     f.write(str(self.libreoffice_process.pid))
             except Exception as e:
-                logger.warning(f"Could not write PID file: {e}")
+                logger.error(f"Could not write PID file: {e}")
 
             time.sleep(5)   # Give LibreOffice time to start
 
@@ -212,7 +212,7 @@ class UnoServer:
                         attempts -= 1
                         continue
                     # This is a different error
-                    logger.warning("Error when starting UnoConverter, retrying: %s", e)
+                    logger.error("Error when starting UnoConverter, retrying: %s", e)
                     # These kinds of errors can be retried fewer times
                     attempts -= 4
                     time.sleep(5)
@@ -240,7 +240,7 @@ class UnoServer:
                         time.sleep(2)
                         continue
                     # This is a different error
-                    logger.warning("Error when starting UnoConverter, retrying: %s", e)
+                    logger.error("Error when starting UnoConverter, retrying: %s", e)
                     # These kinds of errors can be retried fewer times
                     attempts -= 4
                     time.sleep(5)
@@ -641,7 +641,7 @@ class UnoServer:
                 if session_id in self.slideshow_sessions:
                     return self.slideshow_sessions[session_id].get_settings()
                 
-                logger.warning(f"Settings requested for unknown session: {session_id}")
+                logger.error(f"Settings requested for unknown session: {session_id}")
                 return {}
             # =====================================================================
 

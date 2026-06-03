@@ -100,61 +100,18 @@ class UnoSlideshow:
         if self.document is None:
             raise RuntimeError("LibreOffice could not find or load the document.")
 
-        # Move the main editor window to an alternate monitor
-        # based on the target display coordinates provided in options.
-        target_x = options.get("display_x")
-        target_y = options.get("display_y")
-
-        target_monitor = None
-        alt_monitor = None
-        
-        with self._monitor_lock:
-            current_monitors = list(self.monitors)
-
-        if target_x is not None and target_y is not None:
-            target_x_int, target_y_int = int(target_x), int(target_y)
-            for m in current_monitors:
-                if m.x <= target_x_int < m.x + m.width and m.y <= target_y_int < m.y + m.height:
-                    target_monitor = m
-                    break
-
-        if not target_monitor and current_monitors:
-            target_monitor = current_monitors[0]
-
-        # Find an alternate monitor to stash the editor
-        for m in current_monitors:
-            if m.x != target_monitor.x and m.y != target_monitor.y:
-                alt_monitor = m
-                break
-        
-        # Fallback if only 1 monitor exists
-        if not alt_monitor and current_monitors:
-            alt_monitor = current_monitors[0]
-
         try:
             frame = self.document.getCurrentController().getFrame()
             window = frame.getContainerWindow()
             
             # Hide the window from the OS task switcher/view
             window.setVisible(False)
-            
-            if alt_monitor:
-                # 15 is the PosSize flag (X | Y | WIDTH | HEIGHT)
-                # Stash it on the alternate monitor scaled down
-                window.setPosSize(
-                    alt_monitor.x,
-                    alt_monitor.y,
-                    1,
-                    1,
-                    15
-                )
-                logger.debug(f"Editor window successfully hidden and moved to alternate monitor at x={alt_monitor.x}, y={alt_monitor.y}")
-            else:
-                # Fallback if screeninfo array was empty
-                window.setPosSize(-10000, -10000, 1, 1, 15)
-                logger.debug("Editor window successfully hidden and moved off-screen.")
+            # Fallback if screeninfo array was empty
+            window.setPosSize(-10000, -10000, 1, 1, 15)
+            logger.debug("Editor window successfully hidden and moved off-screen.")
+
         except Exception as e:
-            logger.warning(f"Could not move editor window off-screen: {e}")
+            logger.error(f"Could not move editor window off-screen: {e}")
 
         self.presentation = self.document.getPresentation()
         if self.presentation is None:
@@ -194,6 +151,12 @@ class UnoSlideshow:
             except Exception as e:
                 logger.debug(f"Could not set IsAlwaysOnTop: {e}")
 
+            # Ensure we are using Native Fullscreen (Type 0) to support negative coordinates
+            try:
+                self.presentation.setPropertyValue("Type", 0)
+            except Exception:
+                pass
+
             # Target specific display via coordinates
             if "display_x" in options and "display_y" in options:
                 target_display = self._get_display_index_for_coords(
@@ -205,7 +168,7 @@ class UnoSlideshow:
                     self.presentation.setPropertyValue("Display", target_display)
                     logger.info(f"Targeting slideshow to Display {target_display} for coords ({options['display_x']}, {options['display_y']})")
                 except Exception as e:
-                    logger.warning(f"Could not set Display property: {e}")
+                    logger.error(f"Could not set Display property: {e}")
             else:
                 # Default fallback if no coordinates are provided
                 try:
@@ -225,7 +188,7 @@ class UnoSlideshow:
                 dispatch_helper.executeDispatch(frame, ".uno:Presentation", "", 0, ())
                 logger.debug("Slideshow triggered via UI Dispatcher.")
             except Exception as e:
-                logger.warning(f"Dispatcher failed, falling back to UNO API: {e}")
+                logger.error(f"Dispatcher failed, falling back to UNO API: {e}")
                 self.presentation.start()
 
             # 4. Consume options
@@ -239,10 +202,6 @@ class UnoSlideshow:
 
             # 5. Wait for the controller to become available
             slideShowController = None
-
-            # Extract target coordinates if available to drive hardware mouse targeting
-            target_x = options.get("display_x")
-            target_y = options.get("display_y")
 
             for i in range(30): # Poll for 15 seconds
                 time.sleep(0.5)
@@ -263,7 +222,7 @@ class UnoSlideshow:
                         page = draw_pages.getByIndex(target_idx)
                         slideShowController.gotoSlide(page)
                 except Exception as e:
-                    logger.warning(f"Could not jump to slide {start_slide}: {e}")
+                    logger.error(f"Could not jump to slide {start_slide}: {e}")
 
             self.is_running = True
             return True
@@ -281,9 +240,9 @@ class UnoSlideshow:
             if controller:
                 controller.gotoNextSlide()
             else:
-                logger.warning("Controller not available for next_slide")
+                logger.error("Controller not available for next_slide")
         except Exception as e:
-            logger.warning(f"next_slide failed: {e}")
+            logger.error(f"next_slide failed: {e}")
 
 
     def previous(self):
@@ -295,9 +254,9 @@ class UnoSlideshow:
             if controller:
                 controller.gotoPreviousSlide()
             else:
-                logger.warning("Controller not available for previous_slide")
+                logger.error("Controller not available for previous_slide")
         except Exception as e:
-            logger.warning(f"previous_slide failed: {e}")
+            logger.error(f"previous_slide failed: {e}")
 
 
     def goto_slide(self, index: int):
@@ -313,11 +272,11 @@ class UnoSlideshow:
                     page = draw_pages.getByIndex(index)
                     controller.gotoSlide(page)
                 else:
-                    logger.warning(f"goto_slide failed: index {index} is out of bounds")
+                    logger.error(f"goto_slide failed: index {index} is out of bounds")
             else:
-                logger.warning(f"Controller not available for goto_slide({index})")
+                logger.error(f"Controller not available for goto_slide({index})")
         except Exception as e:
-            logger.warning(f"goto_slide({index}) failed: {e}")
+            logger.error(f"goto_slide({index}) failed: {e}")
 
     def pause(self):
         if self.presentation:
@@ -389,7 +348,7 @@ class UnoSlideshow:
                 "is_always_on_top": self.presentation.getPropertyValue("IsAlwaysOnTop")
             }
         except Exception as e:
-            logger.warning(f"Could not fetch presentation settings: {e}")
+            logger.error(f"Could not fetch presentation settings: {e}")
             return {}
 
     def _update_monitors(self):
@@ -402,11 +361,11 @@ class UnoSlideshow:
                 self.monitors = fresh_monitors
                 
         except ImportError:
-            logger.warning("screeninfo library not found. Run: pip install screeninfo")
+            logger.error("screeninfo library not found. Run: pip install screeninfo")
             with self._monitor_lock:
                 self.monitors = []
         except Exception as e:
-            logger.warning(f"Error fetching monitors in background thread: {e}")
+            logger.error(f"Error fetching monitors in background thread: {e}")
 
     def _start_monitor_ticker(self):
         """Starts a background thread that updates monitors every 10 seconds."""
@@ -453,11 +412,11 @@ class UnoSlideshow:
                 self.monitors = fresh_monitors
                 
         except ImportError:
-            logger.warning("screeninfo library not found. Run: pip install screeninfo")
+            logger.error("screeninfo library not found. Run: pip install screeninfo")
             with self._monitor_lock:
                 self.monitors = []
         except Exception as e:
-            logger.warning(f"Error fetching monitors in background thread: {e}")
+            logger.error(f"Error fetching monitors in background thread: {e}")
 
     def _start_monitor_ticker(self):
         """Starts a background thread that updates monitors every 10 seconds."""

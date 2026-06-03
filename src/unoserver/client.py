@@ -7,7 +7,7 @@ import warnings
 
 from importlib import metadata
 from xmlrpc.client import ServerProxy
-from typing import Dict
+from typing import Any, Dict, Optional
 
 __version__ = metadata.version("unoserver")
 logger = logging.getLogger("unoserver")

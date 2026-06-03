@@ -247,13 +247,31 @@ def test_window_visibility_via_uno(visible_slideshow_server, filename):
     """Advanced test — verify slideshow controller becomes active"""
     _, _ = visible_slideshow_server
     clt = client.UnoClient(port="2005")
+    
+    # Dynamically detect attached displays
+    detected_monitors = get_monitors()
+    if not detected_monitors:
+        pytest.skip("No monitors detected via screeninfo.")
+
+    # Target the 2nd monitor if found, else fall back to the 1st one
+    if len(detected_monitors) >= 2:
+        m = detected_monitors[1]
+    else:
+        m = detected_monitors[0]
+
+    opts = {
+        "start_slide": 1, 
+        "display_x": m.x + (m.width // 2), 
+        "display_y": m.y + (m.height // 2)
+    }
 
     ppt_path = os.path.join(TEST_DOCS, filename)
     if not os.path.exists(ppt_path):
         pytest.skip(f"Missing: {filename}")
 
-    session_id = clt.load_presentation(ppt_path)
-    clt.start_slideshow(session_id)
+    # Inject options context during the load phase to ensure correct editor stashing
+    session_id = clt.load_presentation(ppt_path, opts)
+    clt.start_slideshow(session_id, opts)
 
     time.sleep(3)   # Allow initialization
 
