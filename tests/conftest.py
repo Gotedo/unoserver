@@ -77,14 +77,30 @@ def cleanup_locks_after_tests():
 
 @pytest.fixture(scope="session")
 def server_fixture():
-    """Original fixture - headless conversion server"""
+    """Headless conversion server fixture - now with proper soffice detection"""
+    if not is_uno_available():
+        pytest.skip("uno library not available")
+
+    soffice_path = find_soffice_executable()
+    print(f"Using soffice executable: {soffice_path}")
+
     with tempfile.TemporaryDirectory() as tmpuserdir:
         user_installation = Path(tmpuserdir).as_uri()
-        srvr = server.UnoServer(user_installation=user_installation)
-        process = srvr.start()
-        # Give libreoffice a chance to start
-        time.sleep(8)
-        yield process  # provide the fixture value
+
+        srvr = server.UnoServer(
+            user_installation=user_installation,
+            # You can add these if your UnoServer supports them:
+            # port=2003,
+            # uno_port=2002,
+        )
+
+        # Pass the executable explicitly
+        process = srvr.start(executable=soffice_path, headless=True)
+        
+        print("Waiting for server to start...")
+        time.sleep(8)   # Give it time to initialize
+
+        yield process
         print("Teardown Unoserver")
         srvr.stop()
 

@@ -44,10 +44,10 @@ devenv = [
 ]
 
 [project.scripts]
-unoserver = "gotedo_unoserver.server:main"
-unoconvert = "gotedo_unoserver.client:converter_main"
-unocompare = "gotedo_unoserver.client:comparer_main"
-unoping = "gotedo_unoserver.client:ping_main"
+gotedo_unoserver = "gotedo_unoserver.server:main"
+gotedo_unoconvert = "gotedo_unoserver.client:converter_main"
+gotedo_unocompare = "gotedo_unoserver.client:comparer_main"
+gotedo_unoping = "gotedo_unoserver.client:ping_main"
 
 [project.urls]
 Homepage = "https://github.com/gotedo/unoserver"

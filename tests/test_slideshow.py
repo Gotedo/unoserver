@@ -141,19 +141,19 @@ def test_multiple_concurrent_slideshows():
         srvr2 = server.UnoServer(user_installation=install_url_2, port="2007", uno_port="2006")
 
         sid1 = sid2 = None
+        clt1 = clt2 = None
 
         try:
             # 3. Start both servers
             # Note: Slideshows strictly require headless=False, but our hidden document 
             # architecture ensures the UI remains completely invisible to the user.
-            from .conftest import find_soffice_executable 
             executable = find_soffice_executable()
             
             # Start Instance 1 unconditionally since at least 1 monitor is guaranteed
             srvr1.start(executable=executable, headless=False)
             
             # Allow time for both heavy LibreOffice C++ engines to boot up
-            time.sleep(5)
+            time.sleep(10)   # Increased for stability
 
             # 4. Connect independent client
             clt1 = client.UnoClient(port="2005")
@@ -194,7 +194,7 @@ def test_multiple_concurrent_slideshows():
             if num_instances == 2:
                 # Conditionally start Instance 2 only if a second physical monitor is attached
                 srvr2.start(executable=executable, headless=False)
-                time.sleep(5)
+                time.sleep(10)   # Increased for stability on second instance
 
                 clt2 = client.UnoClient(port="2007")
 
@@ -229,10 +229,10 @@ def test_multiple_concurrent_slideshows():
 
         finally:
             # 9. Guaranteed Cleanup (Even if assertions fail)
-            if sid1:
+            if sid1 and clt1:
                 try: clt1.end_slideshow(sid1)
                 except Exception: pass
-            if sid2:
+            if sid2 and clt2:
                 try: clt2.end_slideshow(sid2)
                 except Exception: pass
             
