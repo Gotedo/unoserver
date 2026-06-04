@@ -3,9 +3,9 @@ requires = ["setuptools>=61.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "unoserver"
-version = "3.7.dev0"
-description = "A server for file conversions with Libre Office"
+name = "gotedo-unoserver"
+version = "1.0.0"
+description = "A server for file conversions and slideshows with Libre Office"
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Topic :: Office/Business",
@@ -19,19 +19,17 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "License :: OSI Approved :: MIT License",
 ]
-keywords = ["libreoffice", "conversion", "documents", "uno", "unoconv"]
+keywords = ["libreoffice", "conversion", "documents", "uno", "unoconv", "slideshow", "presentations", "powerpoint"]
 authors = [
-    {name = "Lennart Regebro", email = "regebro@gmail.com"},
     { name = "Ndianabasi Udonkang", email = "ndianabasi.udonkang@gmail.com" }
 ]
 license = {text = "MIT"}
-urls = {Homepage = "https://github.com/unoconv/unoserver"}
 dynamic = ["readme"]
 requires-python = ">= 3.8"
 
 dependencies = [
-    "screeninfo==0.8.1",
-    "psutil==7.2.2",
+    "screeninfo>=0.8.1",
+    "psutil>=7.2.2",
 ]
 
 [project.optional-dependencies]
@@ -51,8 +49,12 @@ unoconvert = "unoserver.client:converter_main"
 unocompare = "unoserver.client:comparer_main"
 unoping = "unoserver.client:ping_main"
 
+[project.urls]
+Homepage = "https://github.com/gotedo/unoserver"
+Repository = "https://github.com/gotedo/unoserver"
+
 [tool.setuptools]
-packages = ["unoserver"]
+packages = ["gotedo_unoserver"]
 package-dir = {"" = "src"}
 include-package-data = true
 zip-safe = false
