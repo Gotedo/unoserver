@@ -26,7 +26,7 @@ from gotedo_unoserver.slideshow import UnoSlideshow
 from typing import Dict
 
 API_VERSION = "3"
-__version__ = metadata.version("unoserver")
+__version__ = metadata.version("gotedo-unoserver")
 logger = logging.getLogger("unoserver")
 
 

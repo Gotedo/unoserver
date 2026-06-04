@@ -9,7 +9,7 @@ from importlib import metadata
 from xmlrpc.client import ServerProxy
 from typing import Any, Dict, Optional
 
-__version__ = metadata.version("unoserver")
+__version__ = metadata.version("gotedo-unoserver")
 logger = logging.getLogger("unoserver")
 
 API_VERSION = "3"
