@@ -4,11 +4,11 @@
 # =============================================
 
 # Load UNOSERVER_GH_TOKEN from macOS Keychain (only for this command)
-export UNOSERVER_GH_TOKEN=$(security find-generic-password -a "UNOSERVER_GH_TOKEN" -s "github" -w 2>/dev/null)
+export UNOSERVER_GH_TOKEN=$(security find-generic-password -a "UNOSERVER_GH_TOKEN" -s "unoserver_github_token" -w 2>/dev/null)
 
 if [ -z "$UNOSERVER_GH_TOKEN" ]; then
     echo "❌ UNOSERVER_GH_TOKEN not found in Keychain. Please store it first:"
-    echo "   security add-generic-password -a \"UNOSERVER_GH_TOKEN\" -s \"github\" -w \"ghp_...\""
+    echo "   security add-generic-password -a \"UNOSERVER_GH_TOKEN\" -s \"unoserver_github_token\" -w \"ghp_...\""
     exit 1
 fi
 
