@@ -1,8 +1,11 @@
-1.0.0 (2026-06-04)
-------------------
+3.7 (2026-06-04)
+----------------
 
-- Nothing changed yet.
+- Initial release of `gotedo-unoserver` fork
 
+- Support for slideshow functionality
+
+- Better macOS LibreOffice bundle support
 
 3.6 (2025-11-24)
 ----------------

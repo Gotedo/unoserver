@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gotedo-unoserver"
-version = "1.0.0"
+version = "3.7-alpha0"
 description = "A server for file conversions and slideshows with Libre Office"
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -40,7 +40,7 @@ devenv = [
     "flake8",
     "pyroma",
     "check-manifest",
-    "zest.releaser",
+    "python-semantic-release",
 ]
 
 [project.scripts]
@@ -70,3 +70,19 @@ ignore = """
 .pre-commit-config.yaml
 tests/*
 tests/documents/*"""
+
+[tool.semantic_release]
+version_variable = "src/gotedo_unoserver/__init__.py:__version__"
+branch = "main"
+build_command = "python -m build --sdist --wheel ."
+dist_glob = "dist/*"
+upload_to_pypi = true
+upload_to_release = true
+remove_dist = false
+tag_format = "v{version}"
+version_toml = ["pyproject.toml:project.version"]
+commit_parser = "conventional"
+
+[tool.semantic_release.changelog.default_templates]
+changelog_file = "CHANGES.rst"
+output_format = "rst"
