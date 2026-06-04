@@ -78,7 +78,7 @@ build_command = "python -m build --sdist --wheel ."
 dist_glob = "dist/*"
 upload_to_pypi = true
 upload_to_release = true
-remove_dist = false
+remove_dist = true
 tag_format = "v{version}"
 version_toml = ["pyproject.toml:project.version"]
 commit_parser = "conventional"
@@ -86,3 +86,7 @@ commit_parser = "conventional"
 [tool.semantic_release.changelog.default_templates]
 changelog_file = "CHANGES.rst"
 output_format = "rst"
+
+[tool.semantic_release.remote.token]
+env = "UNOSERVER_GH_TOKEN"
+default_env = "GH_TOKEN"

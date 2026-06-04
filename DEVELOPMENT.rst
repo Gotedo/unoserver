@@ -42,6 +42,6 @@ Releasing
 
 For releases we use zest.releaser to release, package and upload to PyPI.
 Make sure you have a correct .pypirc so that you can upload packages to PyPI.
-The run the `fullrelease` command from zest.releaser, and it will guide you through the process.
+The run the `./release` command which is a wrapper around `semantic_release` with GH_TOKEN injection, and it will guide you through the process.
 
-    $ fullrelease
+    $ ./release
