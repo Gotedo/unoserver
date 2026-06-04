@@ -90,3 +90,7 @@ output_format = "rst"
 [tool.semantic_release.remote.token]
 env = "UNOSERVER_GH_TOKEN"
 default_env = "GH_TOKEN"
+
+[tool.zest-releaser]
+release = "yes"
+register = "yes"
