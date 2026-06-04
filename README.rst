@@ -1,7 +1,7 @@
 gotedo-unoserver
-=========
+================
 
-Using LibreOffice as a server for converting and comparing documents, and running slideshows for presentations.
+**Using LibreOffice as a server for converting and comparing documents, and running slideshows for presentations.**
 
 Overview
 --------
@@ -351,16 +351,15 @@ To run the tests, you **must** use a Python environment tied to the interpreter 
 
 #### 1. Download and Install LibreOffice
 
-* Download the latest stable version of **LibreOffice** from the official website:
-[https://www.libreoffice.org/download/download-libreoffice/](https://www.libreoffice.org/download/download-libreoffice/)
+* Download the latest stable version of **LibreOffice** from the official website: [https://www.libreoffice.org/download/download-libreoffice/](https://www.libreoffice.org/download/download-libreoffice/)
 * Install it normally on your system.
 
 #### 2. Clone the Fork
 
-.. code::
+.. code:: bash
 
-git clone https://github.com/gotedo/unoserver.git
-cd unoserver
+  git clone https://github.com/gotedo/unoserver.git
+  cd unoserver
 
 
 #### 3. Set Up and Activate the Python Virtual Environment (ve)
@@ -369,33 +368,33 @@ Instead of targeting LibreOffice's deeply nested Python executable for every com
 
 **macOS:**
 
-.. code::
+.. code:: bash
 
-# Define path to LibreOffice's internal Python
-LO_PYTHON="$HOME/LibreOffice.app/Contents/Resources/python"
+  # Define path to LibreOffice's internal Python
+  LO_PYTHON="$HOME/LibreOffice.app/Contents/Resources/python"
 
-# Create the virtual environment named 've'
-"$LO_PYTHON" -m venv ve
+  # Create the virtual environment named 've'
+  "$LO_PYTHON" -m venv ve
 
-# Activate the virtual environment
-source ve/bin/activate
+  # Activate the virtual environment
+  source ve/bin/activate
 
 
 **Windows (PowerShell):**
 
-.. code::
+.. code:: powershell
 
-# Define path to LibreOffice's internal Python
-$LO_PYTHON = "$env:USERPROFILE\LibreOffice\program\python.exe"
+  # Define path to LibreOffice's internal Python
+  $LO_PYTHON = "$env:USERPROFILE\LibreOffice\program\python.exe"
 
-# Create the virtual environment named 've'
-& $LO_PYTHON -m venv ve
+  # Create the virtual environment named 've'
+  & $LO_PYTHON -m venv ve
 
-# Activate the virtual environment
-.\ve\Scripts\Activate.ps1
+  # Activate the virtual environment
+  .\ve\Scripts\Activate.ps1
 
 
-.. critical::
+.. danger::
    **CRITICAL NOTE FOR MACOS USER LOGOUTS:**
 
    If you log out of macOS or restart your system to apply settings, your terminal session will close. When you open a new terminal window, you **must re-activate the virtual environment** before running your tests or server instances:
@@ -409,10 +408,10 @@ $LO_PYTHON = "$env:USERPROFILE\LibreOffice\program\python.exe"
 
 Once your virtual environment is active, your terminal's standard `python` and `pip` commands point directly to LibreOffice's runtime. You no longer need to pass binary absolute paths.
 
-.. code::
+.. code:: bash
 
-# Install development and testing dependencies (pytest, screeninfo, etc.)
-pip install -e ".[devenv]" --no-build-isolation --no-warn-script-location
+  # Install development and testing dependencies (pytest, screeninfo, etc.)
+  pip install -e ".[devenv]" --no-build-isolation --no-warn-script-location
 
 
 #### 5. Run the Tests
@@ -421,23 +420,23 @@ With the virtual environment (`ve`) activated, execution commands are clean, cro
 
 **Run all tests:**
 
-.. code::
+.. code:: bash
 
-python -m pytest tests -q
+  python -m pytest tests -q
 
 
 **Run only slideshow tests:**
 
-.. code::
+.. code:: bash
 
-python -m pytest tests/test_slideshow.py -q --tb=no
+  python -m pytest tests/test_slideshow.py -q --tb=no
 
 
 **Run a specific test:**
 
-.. code::
+.. code:: bash
 
-python -m pytest tests/test_slideshow.py::test_multiple_concurrent_slideshows -q --tb=short -s
+  python -m pytest tests/test_slideshow.py::test_multiple_concurrent_slideshows -q --tb=short -s
 
 
 #### 6. Optional: Create Helper Aliases
@@ -446,24 +445,25 @@ If you regularly open new shells and want to skip typing activation paths, you c
 
 **macOS (add to `~/.zshrc` or `~/.bash_profile`):**
 
-.. code::
+.. code:: bash
 
-alias unove='cd ~/gotedo/unoserver && source ve/bin/activate'
+  alias unove='cd ~/gotedo/unoserver && source ve/bin/activate'
 
 
 Then, in any fresh terminal window (even after an OS logout), you can instantly prepare your context by executing:
 
-.. code::
+.. code:: bash
 
-unove
+  unove
 
 
 #### Platform-Specific Notes
 
 * **macOS**: If you get permission/quarantine issues when LibreOffice windows attempt to map screen contexts, run:
-.. code::
 
-xattr -r -d com.apple.quarantine ~/LibreOffice.app
+.. code:: bash
+
+  xattr -r -d com.apple.quarantine ~/LibreOffice.app
 
 
 * **Windows**: Always use **PowerShell** (not Command Prompt) for executing these environment steps.
@@ -478,7 +478,7 @@ This version is complete, beginner-friendly, and includes all the lessons we lea
 
 
 Comparison with `gotedo_unoconv`
--------------------------
+--------------------------------
 
 Unoserver started as a rewrite, and hopefully a replacement to `gotedo_unoconv`, a module with support
 for using LibreOffice as a listener to convert documents.
