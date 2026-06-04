@@ -9,10 +9,10 @@ from importlib import metadata
 from xmlrpc.client import ServerProxy
 from typing import Any, Dict, Optional
 
-__version__ = metadata.version("gotedo-unoserver")
+from gotedo_unoserver import __version__
 logger = logging.getLogger("unoserver")
 
-API_VERSION = "3"
+API_VERSION = "1"
 SFX_FILTER_IMPORT = 1
 SFX_FILTER_EXPORT = 2
 DOC_TYPES = {

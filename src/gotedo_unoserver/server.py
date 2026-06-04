@@ -25,8 +25,8 @@ from com.sun.star.uno import Exception as UnoException
 from gotedo_unoserver.slideshow import UnoSlideshow
 from typing import Dict
 
-API_VERSION = "3"
-__version__ = metadata.version("gotedo-unoserver")
+API_VERSION = "1"
+from gotedo_unoserver import __version__
 logger = logging.getLogger("unoserver")
 
 

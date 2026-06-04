@@ -4,4 +4,8 @@
 
 ## v1.0.0 (2026-06-04)
 
-- Initial Release
+### Added
+
+- Initial release of `gotedo-unoserver` fork
+- Support for slideshow functionality
+- Better macOS LibreOffice bundle support
