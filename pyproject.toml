@@ -40,7 +40,7 @@ devenv = [
     "flake8",
     "pyroma",
     "check-manifest",
-    "zest.releaser",
+    "python-semantic-release",
 ]
 
 [project.scripts]
