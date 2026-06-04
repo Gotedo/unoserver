@@ -1,4 +1,4 @@
-unoserver
+gotedo-unoserver
 =========
 
 Using LibreOffice as a server for converting and comparing documents, and running slideshows for presentations.
@@ -20,10 +20,10 @@ and load and convert documents without exiting and reloading the software. This 
 CPU load when converting many documents with somewhere between 50% and 75%, meaning you can
 convert somewhere between two and four times as many documents in the same time using a listener.
 
-Unoserver contains three commands to help you do this, `unoserver` which starts a listener on the
-specified IP interface and port, and `unoconverter` which will connect to a listener and ask it
-to convert a document, as well as `unocompare` which will connect to a listener and ask it
-to compare two documents and convert the result document. There is also the `unoping` command
+Unoserver contains three commands to help you do this, `gotedo_unoserver` which starts a listener on the
+specified IP interface and port, and `gotedo_unoconverter` which will connect to a listener and ask it
+to convert a document, as well as `gotedo_unocompare` which will connect to a listener and ask it
+to compare two documents and convert the result document. There is also the `gotedo_unoping` command
 that checks if a server is up and running, and prints its versions.
 
 
@@ -33,17 +33,17 @@ Installation
 NB! Windows and Mac support is as of yet untested.
 
 Unoserver needs to be installed by and run with the same Python installation that LibreOffice uses,
-to properly run the `unoserver` command. For client/server installations, see below.
+to properly run the `gotedo_unoserver` command. For client/server installations, see below.
 
 On Unix this usually means you can just install it with::
 
-   $ sudo -H pip install unoserver
+   $ sudo -H pip install gotedo-unoserver
 
 If you have multiple versions of LibreOffice installed, you need to install it for each one.
 Usually each LibreOffice install will have it's own `python` executable and you need to run
 `pip` with that executable::
 
-  $ sudo -H /full/path/to/python -m pip install unoserver
+  $ sudo -H /full/path/to/python -m pip install gotedo-unoserver
 
 To find all Python installations that have the relevant LibreOffice libraries installed,
 you can run a script called `find_uno.py`::
@@ -68,13 +68,13 @@ To install on such distributions, do the following::
 
   $ wget https://bootstrap.pypa.io/get-pip.py
   $ sudo /path/to/python get-pip.py
-  $ sudo /path/to/python -m pip install unoserver
+  $ sudo /path/to/python -m pip install gotedo-unoserver
 
 You can also install it in a virtualenv, if you are using the system Python
 for that virtualenv, and specify the ``--system-site-packages`` parameter::
 
   $ virtualenv --python=/usr/bin/python3 --system-site-packages virtenv
-  $ virtenv/bin/pip install unoserver
+  $ virtenv/bin/pip install gotedo-unoserver
 
 Windows and Mac installs aren't officially supported yet, but on Windows the
 paths to the LibreOffice Python executable are usually in locations such as
@@ -86,7 +86,7 @@ example `/Applications/LibreOffice.app/Contents/python` or
 Usage
 -----
 
-Installing unoserver installs four scripts, `unoserver`, `unoconverter`, `unocompare`
+Installing unoserver installs four scripts, `gotedo_unoserver`, `gotedo_unoconverter`, `gotedo_unocompare`
 and `unoping`. The server can also be run as a module with `python3 -m gotedo_unoserver.server`,
 with the same arguments as the main script, which can be useful as it must be run with
 the LibreOffice provided Python.
@@ -97,7 +97,7 @@ Unoserver
 
 .. code::
 
-  unoserver [-h] [-v] [--interface INTERFACE] [--uno-interface UNO_INTERFACE] [--port PORT] [--uno-port UNO_PORT]
+  gotedo_unoserver [-h] [-v] [--interface INTERFACE] [--uno-interface UNO_INTERFACE] [--port PORT] [--uno-port UNO_PORT]
             [--daemon] [--executable EXECUTABLE] [--user-installation USER_INSTALLATION]
             [-p/--libreoffice-pid-file LIBREOFFICE_PID_FILE] [--conversion-timeout CONVERSION_TIMEOUT]
             [--stop-after STOP_AFTER] [--verbose] [--quiet] [-f/--logfile logfile]
@@ -124,7 +124,7 @@ Unoconvert
 
 .. code::
 
-  unoconvert [-h] [-v] [--convert-to CONVERT_TO] [--input-filter INPUT_FILTER] [--output-filter OUTPUT_FILTER]
+  gotedo_unoconvert [-h] [-v] [--convert-to CONVERT_TO] [--input-filter INPUT_FILTER] [--output-filter OUTPUT_FILTER]
              [--filter-option FILTER_OPTIONS] [--update-index] [--dont-update-index] [--host HOST] [--port PORT]
              [--host-location {auto,remote,local}] [--protocol {http, https}] [-f/--logfile logfile] infile outfile
 
@@ -149,15 +149,15 @@ Unoconvert
 
 Example for setting PNG width/height::
 
-  unoconvert infile.odt outfile.png --filter-options PixelWidth=640 --filter-options PixelHeight=480
+  gotedo_unoconvert infile.odt outfile.png --filter-options PixelWidth=640 --filter-options PixelHeight=480
 
 Example for setting CSV output options::
 
-  unoconvert infile.xlsx outfile.csv --filter-options "59,34,76,1"
+  gotedo_unoconvert infile.xlsx outfile.csv --filter-options "59,34,76,1"
 
 Example for HTML export with embedded images::
 
-  unoconvert infile.odt outfile.html --filter-options EmbedImages
+  gotedo_unoconvert infile.odt outfile.html --filter-options EmbedImages
 
 
 Unocompare
@@ -165,7 +165,7 @@ Unocompare
 
 .. code::
 
-  unocompare [-h] [-v] [--file-type FILE_TYPE] [--host HOST] [--port PORT] [--protocol {http, https}]
+  gotedo_unocompare [-h] [-v] [--file-type FILE_TYPE] [--host HOST] [--port PORT] [--protocol {http, https}]
              [--host-location {auto,remote,local}] [-f/--logfile logfile] oldfile newfile outfile
 
 * `oldfile`: The path to the older file to be compared (use - for stdin).
@@ -190,7 +190,7 @@ Unoping
 
 .. code::
 
-  unoping [-h] [-v] [--host HOST] [--port PORT] [--protocol {http,https}]
+  gotedo_unoping [-h] [-v] [--host HOST] [--port PORT] [--protocol {http,https}]
   [--verbose | --quiet] [-f LOGFILE]
 
 * `--host`: The host used by the server, defaults to "127.0.0.1".
@@ -329,7 +329,7 @@ If you are installing Unoserver on a dedicated machine (virtual or not) to do th
 are running the commands from a different machine, or if you want to call the convert/compare commands
 from Python directly, the clients do not need access to Libreoffice. You can therefore follow the
 instructions above to make Unoserver have access to the LibreOffice library, but on the client
-side you can simply install Unoserver as any other Python library, with `python -m pip install unoserver`
+side you can simply install Unoserver as any other Python library, with `python -m pip install gotedo-unoserver`
 using the Python you want to use as the client executable.
 
 Please note that there is no security on either ports used, and as a result Unoserver is vulnerable
@@ -487,21 +487,21 @@ Differences for the user
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 * Easier install for system versions of LibreOffice. On Linux, the packaged versions of LibreOffice
-  typically uses the system Python, making it easy to install `unoserver` with a simple
-  `sudo pip install unoserver` command.
+  typically uses the system Python, making it easy to install `gotedo-unoserver` with a simple
+  `sudo pip install gotedo-unoserver` command.
 
 * Separate commands for server and client. The client no longer tries to start a listener and then
-  close it after conversion if it can't find a listener. Instead the new `unoconverter` client
-  requires the `unoserver` to be started. This makes it less practical for one-off converts,
+  close it after conversion if it can't find a listener. Instead the new `gotedo_unoconverter` client
+  requires the `gotedo_unoserver` to be started. This makes it less practical for one-off converts,
   but as mentioned that can easily be done with LibreOffice itself.
 
-* The `unoserver` listener does not prevent you from using LibreOffice as a normal user, while the
-  `unoconv` listener would block you from starting LibreOffice to open a document normally.
+* The `gotedo_unoserver` listener does not prevent you from using LibreOffice as a normal user, while the
+  `gotedo_unoconv` listener would block you from starting LibreOffice to open a document normally.
 
-* You should be able to on a multi-core machine run several `unoservers` with different ports.
-  There is however no support for any form of load balancing in `unoserver`, you would have to
-  implement that yourself in your usage of `unoconverter`. For performant multi-core scaling, it
-  is necessary to specify unique values for each `unoserver`'s `--port` and `--uno-port` options.
+* You should be able to on a multi-core machine run several `gotedo_unoservers` with different ports.
+  There is however no support for any form of load balancing in `gotedo_unoserver`, you would have to
+  implement that yourself in your usage of `gotedo_unoconverter`. For performant multi-core scaling, it
+  is necessary to specify unique values for each `gotedo_unoserver`'s `--port` and `--uno-port` options.
 
 * Only LibreOffice is officially supported. Other variations are untested.
 
