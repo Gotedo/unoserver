@@ -93,4 +93,4 @@ default_env = "GH_TOKEN"
 
 [tool.zest-releaser]
 release = "yes"
-register = "yes"
+register = "no"
