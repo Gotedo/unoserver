@@ -4,7 +4,8 @@
 # =============================================
 
 # Load UNOSERVER_GH_TOKEN from macOS Keychain (only for this command)
-export UNOSERVER_GH_TOKEN=$(security find-generic-password -a "UNOSERVER_GH_TOKEN" -s "unoserver_github_token" -w 2>/dev/null)
+export UNOSERVER_GH_TOKEN=$(security find-generic-password -a "UNOSERVER_GH_TOKEN" \
+    -s "unoserver_github_token" -w 2>/dev/null)
 
 if [ -z "$UNOSERVER_GH_TOKEN" ]; then
     echo "❌ UNOSERVER_GH_TOKEN not found in Keychain. Please store it first:"
@@ -15,4 +16,19 @@ fi
 echo "✅ UNOSERVER_GH_TOKEN loaded from Keychain"
 
 # Run semantic-release with the token available
+echo "🚀 Running semantic-release $@ ..."
 semantic-release "$@"
+
+echo "✅ semantic-release completed successfully"
+
+# === Additional steps after semantic-release ===
+
+# Push pending commits and tags to remote
+echo "📤 Pushing commits and tags to origin..."
+git push --follow-tags
+
+# Upload to PyPI
+echo "📦 Uploading packages to PyPI..."
+twine upload dist/*
+
+echo "🎉 Release process completed successfully!"
