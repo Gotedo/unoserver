@@ -477,10 +477,10 @@ xattr -r -d com.apple.quarantine ~/LibreOffice.app
 This version is complete, beginner-friendly, and includes all the lessons we learned during debugging. Would you like me to also add a small helper script (`run_slideshow_tests.sh` / `.ps1`) to make this even easier?
 
 
-Comparison with `unoconv`
+Comparison with `gotedo_unoconv`
 -------------------------
 
-Unoserver started as a rewrite, and hopefully a replacement to `unoconv`, a module with support
+Unoserver started as a rewrite, and hopefully a replacement to `gotedo_unoconv`, a module with support
 for using LibreOffice as a listener to convert documents.
 
 Differences for the user
