@@ -4,7 +4,7 @@ import tempfile
 import sys
 from pathlib import Path
 
-from unoserver import server
+from gotedo_unoserver import server
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "integration: mark test as integration test")

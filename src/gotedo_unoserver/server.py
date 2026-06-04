@@ -20,9 +20,9 @@ from concurrent import futures
 from .process_proxy import ExistingProcessProxy
 from .resource_tracker import ResourceTracker
 
-from unoserver import converter, comparer
+from gotedo_unoserver import converter, comparer
 from com.sun.star.uno import Exception as UnoException
-from unoserver.slideshow import UnoSlideshow
+from gotedo_unoserver.slideshow import UnoSlideshow
 from typing import Dict
 
 API_VERSION = "3"

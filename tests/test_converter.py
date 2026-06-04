@@ -5,7 +5,7 @@ import pytest
 import sys
 import uno
 
-from unoserver import converter, client
+from gotedo_unoserver import converter, client
 
 TEST_DOCS = os.path.join(os.path.abspath(os.path.split(__file__)[0]), "documents")
 
@@ -34,12 +34,12 @@ def test_no_uno(monkeypatch):
     # Pytests monkeypatch will unmonkeypatch at the end of the test.
     monkeypatch.setitem(__builtins__, "__import__", new_import)
     del sys.modules["uno"]
-    del sys.modules["unoserver"]
-    del sys.modules["unoserver.converter"]
+    del sys.modules["gotedo_unoserver"]
+    del sys.modules["gotedo_unoserver.converter"]
 
     # This should now raise an import error
     with pytest.raises(ImportError) as e:
-        from unoserver import converter  # noqa: F401
+        from gotedo_unoserver import converter  # noqa: F401
 
     assert "This package must be installed with a Python" in str(e.value)
 

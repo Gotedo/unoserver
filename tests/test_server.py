@@ -4,7 +4,7 @@ import os
 import pytest
 import psutil
 from unittest import mock
-from unoserver import server, client
+from gotedo_unoserver import server, client
 
 TEST_DOCS = os.path.join(os.path.abspath(os.path.split(__file__)[0]), "documents")
 
@@ -115,7 +115,7 @@ def test_resource_tracker_process_death(mock_exists, mock_process):
     assert flushed["5s"] is None
     assert flushed["60s"] is None
 
-@mock.patch("unoserver.client.ServerProxy")
+@mock.patch("gotedo_unoserver.client.ServerProxy")
 def test_client_get_usage_rpc(mock_proxy_class):
     # Setup the mock XML-RPC proxy context manager
     mock_proxy_instance = mock.MagicMock()

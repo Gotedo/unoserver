@@ -10,7 +10,7 @@ from screeninfo import get_monitors
 from .conftest import find_soffice_executable 
 
 try:
-    from unoserver import client, server
+    from gotedo_unoserver import client, server
 except ImportError:
     client = None
     server = None

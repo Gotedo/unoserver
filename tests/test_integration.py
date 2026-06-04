@@ -11,7 +11,7 @@ import tempfile
 import time
 
 from xmlrpc.client import Fault
-from unoserver import client
+from gotedo_unoserver import client
 
 
 TEST_DOCS = os.path.join(os.path.abspath(os.path.split(__file__)[0]), "documents")

@@ -87,7 +87,7 @@ Usage
 -----
 
 Installing unoserver installs four scripts, `unoserver`, `unoconverter`, `unocompare`
-and `unoping`. The server can also be run as a module with `python3 -m unoserver.server`,
+and `unoping`. The server can also be run as a module with `python3 -m gotedo_unoserver.server`,
 with the same arguments as the main script, which can be useful as it must be run with
 the LibreOffice provided Python.
 
@@ -237,8 +237,8 @@ To use the slideshow functionalities, initialize an ``UnoClient`` and connect to
 
 .. code-block:: python
 
-    from unoserver.client import UnoClient
-    from unoserver.server import UnoServer
+    from gotedo_unoserver.client import UnoClient
+    from gotedo_unoserver.server import UnoServer
 
     # Create a server
     server = UnoServer(user_installation=install_url_1, port="2003", uno_port="2004")
@@ -284,7 +284,7 @@ The telemetry engine runs in a background thread, aggregating resource data into
 
 .. code-block:: python
 
-    from unoserver.client import UnoClient
+    from gotedo_unoserver.client import UnoClient
 
     # Connect to the server managing the presentation
     # The port specified here is the XML-RPC server port
