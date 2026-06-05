@@ -57,7 +57,8 @@ class UnoServer:
         uno_port="2002",
         user_installation=None,
         conversion_timeout=None,
-        stop_after=None
+        stop_after=None,
+        headless=True
     ):
         self.interface = interface
         self.uno_interface = uno_interface
@@ -71,17 +72,23 @@ class UnoServer:
         self.xmlrcp_server = None
         self.intentional_exit = False
         self.tracker = ResourceTracker()
+        self.headless = headless
 
-    def start(self, executable="libreoffice", headless=True):
+    def start(self, executable="libreoffice", headless=None):
         """
         Start the UnoServer.
 
         Args:
             executable (str): Path to 'soffice' or 'libreoffice' executable.
-            headless (bool): 
-                - True (default): Runs in headless mode → used by conversion workers.
+            headless (bool, optional): 
+                - True: Runs in headless mode → used by conversion workers.
                 - False: Runs in visible mode → required for slideshow functionality.
+                - None (default): Falls back to the value provided in the constructor.
         """
+        # Fall back to the instance variable if not explicitly overridden in start()
+        if headless is None:
+            headless = self.headless
+
         logger.info(f"Starting unoserver {__version__} | headless={headless}")
         
         # Define a port-specific lock file
@@ -794,6 +801,12 @@ def main():
         dest="logfile",
         help="Write logs to a file (defaults to stderr)",
     )
+    parser.add_argument(
+        "--headfull",
+        action="store_false",
+        dest="headless",
+        help="Start a headless server.",
+    )
     args = parser.parse_args()
 
     if args.verbose:
@@ -841,13 +854,14 @@ def main():
             raise RuntimeError("--port and --uno-port must be different")
 
         server = UnoServer(
-            args.interface,
-            args.port,
-            args.uno_interface,
-            args.uno_port,
-            user_installation,
-            args.conversion_timeout,
-            args.stop_after,
+            interface=args.interface,
+            port=args.port,
+            uno_interface=args.uno_interface,
+            uno_port=args.uno_port,
+            user_installation=user_installation,
+            conversion_timeout=args.conversion_timeout,
+            stop_after=args.stop_after,
+            headless=args.headless,
         )
 
         if args.executable is not None:
