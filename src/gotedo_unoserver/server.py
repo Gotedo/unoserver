@@ -722,7 +722,7 @@ class UnoServer:
 
 
 def main():
-    parser = argparse.ArgumentParser("unoserver")
+    parser = argparse.ArgumentParser("gotedo_unoserver")
     parser.add_argument(
         "-v",
         "--version",
